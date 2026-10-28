@@ -1,56 +1,109 @@
-# Welcome to your Expo app 👋
+# MediRem 💊 - Smart Medication Reminder & Routine Tracker
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A modern, high-precision medication reminder and inventory management mobile application built with **React Native**, **Expo SDK 58**, **Expo Router**, and **NativeWind (Tailwind CSS)**.
 
-## Get started
+![MediRem Logo](assets/images/medirem-logo.png)
 
-1. Install dependencies
+---
 
-   ```bash
-   npm install
-   ```
+## 🌟 Key Features
 
-2. Start the app
+### ⏰ 1-Minute Continuous Medical Alarm
+- **Continuous 60s Chime:** High-priority, uncompressed 44.1kHz harmonic alarm sound plays continuously through the device speaker without cutting off prematurely.
+- **Rhythmic Device Vibration:** Multi-beat physical vibration repeats synchronously with the audio chime.
+- **Bypasses Silent Mode:** Configured with `playsInSilentMode: true` and exclusive audio focus so alarms sound aloud even when the phone is set to silent or vibrate.
 
-   ```bash
-   npx expo start
-   ```
+### 🔁 Persistent 3-Minute Repeat Cycle
+- **Unattended Safety Repeat:** If an alarm rings for 1 minute and is not acknowledged, audio pauses and arms an automatic **3-minute snooze timer**.
+- When the 3 minutes elapse, the alarm rings again for another full 1 minute.
+- **Permanent Stop Controls:** Clear in-app options allow stopping the alarm permanently so it never rings again after 3 minutes for that dose once taken.
 
-In the output, you'll find options to open the app in a
+### 📦 Smart Pill Supply & Auto-Calculated Inventory
+- **Real-Time Remaining Counter:** Displays exact pill count (e.g. `30 / 30 pills (100%)`) with dynamic progress bar and color-coded status badges.
+- **Auto-Sync Duration:** Creating a 7-day routine automatically calculates and defaults supply to `7 pills`; 14 days $\rightarrow$ `14 pills`; 30 days $\rightarrow$ `30 pills`.
+- **One-Tap Actions:**
+  - `Take Dose (-1)`: Decrements supply and marks dose as taken.
+  - `[-]` and `[+]` quick stepper: Adjusts counts instantly.
+  - `Refill`: Resets supply back to 100% capacity.
+  - `Sync to Routine`: 1-tap correction to match pill count with remaining routine days.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+### 📅 Calendar & Clock Time Pickers
+- **Custom Interactive Calendar:** Visual monthly date selector for start and end dates with presets (7 Days, 14 Days, 30 Days, Ongoing).
+- **Time Slot & Clock Selector:** Morning, Afternoon, Evening, Night slots with custom 12-hour AM/PM time selector.
 
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+### 📸 Medication Photo Upload
+- Take a live picture or choose from the photo gallery to visually verify pill shape, color, and packaging on the reminder cards.
 
-## Get a fresh project
+---
 
-When you're ready, run:
+## 🛠 Tech Stack
+
+- **Framework:** [React Native 0.88](https://reactnative.dev/) & [Expo SDK 58](https://expo.dev/)
+- **Navigation:** [Expo Router ~58.0.27](https://docs.expo.dev/router/introduction/) (File-based routing)
+- **Styling:** [NativeWind v4](https://www.nativewind.dev/) (Tailwind CSS)
+- **Audio & Haptics:** [`expo-audio ~58.0.10`](https://docs.expo.dev/versions/latest/sdk/audio/) & `react-native Vibration`
+- **Notifications:** [`expo-notifications ~58.1.6`](https://docs.expo.dev/versions/latest/sdk/notifications/)
+- **Camera & Gallery:** [`expo-image-picker ~58.0.10`](https://docs.expo.dev/versions/latest/sdk/image-picker/)
+- **Language:** TypeScript 6 & Strict Mode
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+- Node.js (v18 or higher)
+- Expo Go app on Android or iOS, or a physical device connected via USB
+
+### Installation
 
 ```bash
-npm run reset-project
+# 1. Clone repository
+git clone https://github.com/MD-Kayesur/MediRem_app_react-native.git
+cd MediRem_app_react-native
+
+# 2. Install dependencies
+npm install
+
+# 3. Start development server
+npx expo start
 ```
 
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
+Scan the QR code with **Expo Go** (Android) or the Camera app (iOS) to launch the app instantly.
 
-### Other setup steps
+---
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+## 📱 Project Structure
 
-## Learn more
+```
+├── assets/
+│   ├── images/              # App icons, splash screens, and MediRem branding
+│   └── sounds/              # 44.1kHz uncompressed alarm chime (alarm.wav)
+├── scripts/
+│   ├── generate-alarm-sound.js       # Synthesizes high-clarity harmonic audio
+│   └── patch-expo-notifications.js   # Expo Go compatibility patches
+├── src/
+│   ├── app/
+│   │   ├── _layout.tsx      # Root application layout & provider setup
+│   │   ├── index.tsx        # Splash / initial redirect entry point
+│   │   └── (tabs)/
+│   │       ├── _layout.tsx  # Bottom tab bar navigator
+│   │       ├── today.tsx    # Daily dose checklist & live countdowns
+│   │       ├── meds.tsx     # Medication management, routines, & alarm modal
+│   │       ├── history.tsx  # Adherence history & logs
+│   │       └── profile.tsx  # User profile & preferences
+│   ├── components/
+│   │   └── date-time-picker-modal.tsx  # Interactive Calendar & Clock modals
+│   ├── services/
+│   │   ├── sound-service.ts            # expo-audio speaker alarm & vibration loop
+│   │   └── notification-service.ts     # Push notification scheduling
+│   └── global.css           # Tailwind CSS directives
+├── app.json                 # Expo configuration
+├── tailwind.config.js       # Tailwind CSS configuration
+└── tsconfig.json            # TypeScript configuration
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+---
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## 📄 License
 
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+This project is open source and available under the [MIT License](LICENSE).
