@@ -936,8 +936,8 @@ export default function MedsScreen() {
           const isPaused = med.status === 'paused';
           const doseKey = getDoseKey(med.id, med.time, currentTime);
           const isTakenToday = takenDoseKeys.has(doseKey);
-          const isStoppedToday = permanentlyStoppedKeys.has(doseKey);
-          const isDoneToday = isTakenToday || isStoppedToday;
+          const isThisDoseStoppedPermanent = permanentlyStoppedKeys.has(doseKey);
+          const isDoneToday = isTakenToday || isThisDoseStoppedPermanent;
 
           // When dose is completed today, getCountdownInfo targets tomorrow with isDue=false!
           const countdown = getCountdownInfo(med.time, currentTime, isPaused, isDoneToday);
