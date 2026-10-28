@@ -44,7 +44,7 @@ async function configureAudioMode() {
       await setAudioModeAsync({
         playsInSilentMode: true,
         shouldPlayInBackground: true,
-        interruptionMode: 'mixWithOthers',
+        interruptionMode: 'doNotMix',
       });
     }
   } catch (err) {
@@ -53,7 +53,7 @@ async function configureAudioMode() {
 }
 
 /**
- * Initialize or get expo-audio player
+ * Initialize or get expo-audio player at maximum volume
  */
 function getNativeAudioPlayer() {
   if (!audioPlayerInstance) {
@@ -123,28 +123,39 @@ export function triggerAudibleAlarm(onRingComplete?: () => void): boolean {
   try {
     notifyListeners(true);
 
-    // 1. Continuous rhythmic alarm vibration pattern with repeat throughout the 1 minute
+    // 1. Ensure maximum volume audio mode is active
+    configureAudioMode().catch(() => {});
+
+    // 2. Continuous rhythmic alarm vibration pattern with repeat throughout the 1 minute
     if (Platform.OS !== 'web') {
-      // Repeat pattern [delay, vibrate, pause, vibrate...]
-      Vibration.vibrate([0, 600, 250, 600, 250, 800], true);
+      // Strong continuous vibration pattern [delay, vibrate, pause, vibrate...]
+      Vibration.vibrate([0, 1000, 300, 1000, 300, 1000, 300, 1000], true);
     }
 
-    // 2. Clear any existing auto-stop timer
+    // 3. Clear any existing auto-stop timer
     if (autoStopTimer) {
       clearTimeout(autoStopTimer);
     }
 
-    // 3. Ring continuously for 1 FULL MINUTE (60,000 ms)
+    // 4. Ring continuously for 1 FULL MINUTE (60,000 ms)
     autoStopTimer = setTimeout(() => {
       stopAudibleAlarm();
       onRingComplete?.();
     }, ALARM_RING_DURATION_MS);
 
-    // 4. Play audible alarm sound via expo-audio looping
+    // 5. Play audible alarm sound loudly via expo-audio looping
     let played = false;
-    const player = getNativeAudioPlayer();
-    if (player) {
-      try {
+    try {
+      let player = getNativeAudioPlayer();
+      if (!player) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { createAudioPlayer } = require('expo-audio');
+        const soundAsset = require('../../assets/sounds/alarm.wav');
+        audioPlayerInstance = createAudioPlayer(soundAsset);
+        player = audioPlayerInstance;
+      }
+
+      if (player) {
         player.volume = 1.0;
         player.loop = true;
         if (typeof player.seekTo === 'function') {
@@ -152,23 +163,35 @@ export function triggerAudibleAlarm(onRingComplete?: () => void): boolean {
         }
         player.play();
         played = true;
-      } catch (err) {
-        console.warn('[SoundService] player.play error:', err);
+      }
+    } catch (err) {
+      console.warn('[SoundService] player.play retry:', err);
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { createAudioPlayer } = require('expo-audio');
+        const soundAsset = require('../../assets/sounds/alarm.wav');
+        audioPlayerInstance = createAudioPlayer(soundAsset);
+        audioPlayerInstance.volume = 1.0;
+        audioPlayerInstance.loop = true;
+        audioPlayerInstance.play();
+        played = true;
+      } catch (err2) {
+        console.warn('[SoundService] fallback failed:', err2);
       }
     }
 
-    // 5. Web fallback chime loop for browser preview
+    // 6. Web fallback chime loop for browser preview
     if (Platform.OS === 'web') {
       playWebChime();
       if (webAudioInterval) clearInterval(webAudioInterval);
-      webAudioInterval = setInterval(playWebChime, 1500);
+      webAudioInterval = setInterval(playWebChime, 1200);
       played = true;
     }
 
     return played;
   } catch (err) {
     console.warn('[SoundService] Failed to trigger audible alarm:', err);
-    Vibration.vibrate([0, 500, 200, 500]);
+    Vibration.vibrate([0, 1000, 400, 1000]);
     return false;
   }
 }

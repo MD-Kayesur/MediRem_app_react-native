@@ -138,6 +138,16 @@ const TIME_SLOTS: {
   { slot: 'Night', defaultTime: '10:00 PM', icon: 'moon', color: '#6366F1' },
 ];
 
+export interface CountdownInfo {
+  text: string;
+  label: string;
+  isDue: boolean;
+  isLate: boolean;
+  isUrgent: boolean;
+  isDoneToday: boolean;
+  lateSecs: number;
+}
+
 function getNextDoseTarget(timeStr?: string, isDoneToday: boolean = false): Date {
   const now = new Date();
   const target = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -158,17 +168,15 @@ function getNextDoseTarget(timeStr?: string, isDoneToday: boolean = false): Date
         return target;
       }
 
-      // If scheduled time has already passed by more than 15 mins today, target tomorrow
-      if (target.getTime() < now.getTime() - 15 * 60 * 1000) {
-        target.setDate(target.getDate() + 1);
-      }
+      // If not taken today, return today's scheduled dose time!
+      // This preserves exact late time calculation!
       return target;
     }
   }
 
   // Fallback to end of day if parse fails
   target.setHours(20, 0, 0, 0);
-  if (isDoneToday || target.getTime() < now.getTime()) {
+  if (isDoneToday) {
     target.setDate(target.getDate() + 1);
   }
   return target;
@@ -179,69 +187,89 @@ function getCountdownInfo(
   now: Date,
   isPaused: boolean,
   isDoneToday: boolean = false
-): {
-  text: string;
-  isDue: boolean;
-  isUrgent: boolean;
-  isDoneToday: boolean;
-} {
+): CountdownInfo {
   if (isPaused) {
-    return { text: 'Paused', isDue: false, isUrgent: false, isDoneToday: false };
+    return {
+      text: 'Paused',
+      label: 'Routine Status:',
+      isDue: false,
+      isLate: false,
+      isUrgent: false,
+      isDoneToday: false,
+      lateSecs: 0,
+    };
   }
 
   const target = getNextDoseTarget(timeStr, isDoneToday);
   const diffMs = target.getTime() - now.getTime();
+  const pad = (n: number) => n.toString().padStart(2, '0');
 
-  // If already taken or permanently stopped for today, it is NEVER due!
+  // Case 1: Already taken or permanently stopped for today -> target is TOMORROW!
   if (isDoneToday) {
     const totalSecs = Math.max(0, Math.floor(diffMs / 1000));
     const hours = Math.floor(totalSecs / 3600);
     const mins = Math.floor((totalSecs % 3600) / 60);
     const secs = totalSecs % 60;
-    const pad = (n: number) => n.toString().padStart(2, '0');
 
-    if (hours > 0) {
-      return {
-        text: `${hours}h ${pad(mins)}m ${pad(secs)}s`,
-        isDue: false,
-        isUrgent: false,
-        isDoneToday: true,
-      };
-    }
+    const text = hours > 0
+      ? `${hours}h ${pad(mins)}m ${pad(secs)}s`
+      : `${pad(mins)}m ${pad(secs)}s`;
+
     return {
-      text: `${pad(mins)}m ${pad(secs)}s`,
+      text,
+      label: '✓ Dose Taken Today',
       isDue: false,
+      isLate: false,
       isUrgent: false,
       isDoneToday: true,
+      lateSecs: 0,
     };
   }
 
-  // If due within 15 mins or right now
-  if (diffMs <= 0 && diffMs >= -15 * 60 * 1000) {
-    return { text: 'Due Now! 🔔', isDue: true, isUrgent: true, isDoneToday: false };
+  // Case 2: Past scheduled dose time (LATE / OVERDUE!)
+  // Scheduled time arrived or passed, and not taken yet!
+  if (diffMs <= 0) {
+    const lateSecs = Math.floor(Math.abs(diffMs) / 1000);
+    const lateHours = Math.floor(lateSecs / 3600);
+    const lateMins = Math.floor((lateSecs % 3600) / 60);
+    const lateSecsRem = lateSecs % 60;
+
+    let lateText: string;
+    if (lateHours > 0) {
+      lateText = `${lateHours}h ${pad(lateMins)}m ${pad(lateSecsRem)}s`;
+    } else {
+      lateText = `${pad(lateMins)}m ${pad(lateSecsRem)}s`;
+    }
+
+    return {
+      text: lateText,
+      label: '⚠️ Late by:',
+      isDue: true,
+      isLate: true,
+      isUrgent: true,
+      isDoneToday: false,
+      lateSecs,
+    };
   }
 
+  // Case 3: Future scheduled dose time (REMAINING TIME!)
   const totalSecs = Math.max(0, Math.floor(diffMs / 1000));
   const hours = Math.floor(totalSecs / 3600);
   const mins = Math.floor((totalSecs % 3600) / 60);
   const secs = totalSecs % 60;
 
-  const pad = (n: number) => n.toString().padStart(2, '0');
-
-  if (hours > 0) {
-    return {
-      text: `${hours}h ${pad(mins)}m ${pad(secs)}s`,
-      isDue: false,
-      isUrgent: false,
-      isDoneToday: false,
-    };
-  }
+  const text = hours > 0
+    ? `${hours}h ${pad(mins)}m ${pad(secs)}s`
+    : `${pad(mins)}m ${pad(secs)}s`;
 
   return {
-    text: `${pad(mins)}m ${pad(secs)}s`,
+    text,
+    label: 'Remaining Time:',
     isDue: false,
-    isUrgent: mins <= 10,
+    isLate: false,
+    isUrgent: hours === 0 && mins <= 10,
     isDoneToday: false,
+    lateSecs: 0,
   };
 }
 
@@ -1051,15 +1079,13 @@ export default function MedsScreen() {
                   </View>
                 </View>
               ) : isThisDoseRinging || isThisDoseSnoozed3m || countdown.isDue ? (
-                /* RED DUE ALERT / RINGING / SNOOZE BANNER */
+                /* RED DUE / LATE ALERT / RINGING / SNOOZE BANNER */
                 <TouchableOpacity
                   onPress={handleOpenAlarmModal}
                   activeOpacity={0.8}
                   style={[
                     styles.countdownBanner,
-                    isThisDoseRinging || countdown.isDue
-                      ? styles.countdownBannerDue
-                      : styles.countdownBannerUrgent,
+                    styles.countdownBannerDue,
                   ]}>
                   <View style={styles.countdownLeftRow}>
                     <Ionicons
@@ -1068,7 +1094,7 @@ export default function MedsScreen() {
                           ? 'volume-high'
                           : isThisDoseSnoozed3m
                           ? 'time'
-                          : 'notifications'
+                          : 'alert-circle'
                       }
                       size={15}
                       color={isThisDoseSnoozed3m ? '#D97706' : '#EF4444'}
@@ -1084,7 +1110,7 @@ export default function MedsScreen() {
                         ? `Ringing (${ringSecondsLeft}s left):`
                         : isThisDoseSnoozed3m
                         ? `Snoozed (${Math.floor(snoozeSecondsLeft / 60)}:${(snoozeSecondsLeft % 60).toString().padStart(2, '0')}):`
-                        : 'Dose Alert (Tap to Stop):'}
+                        : countdown.label}
                     </Text>
                   </View>
 
@@ -1109,15 +1135,15 @@ export default function MedsScreen() {
                           : styles.timerTextDue,
                       ]}>
                       {isThisDoseRinging
-                        ? 'Due Now! 🔔'
+                        ? `Ringing (${ringSecondsLeft}s)`
                         : isThisDoseSnoozed3m
                         ? 'Stop Alarm'
-                        : 'Due Now! 🔔'}
+                        : countdown.text}
                     </Text>
                   </View>
                 </TouchableOpacity>
               ) : (
-                /* NORMAL REMAINING TIME COUNTDOWN BANNER OR PAUSED */
+                /* NORMAL FUTURE REMAINING TIME COUNTDOWN BANNER OR PAUSED */
                 <View
                   style={[
                     styles.countdownBanner,
@@ -1154,7 +1180,7 @@ export default function MedsScreen() {
                           ? styles.countdownLabelUrgent
                           : styles.countdownLabelNormal,
                       ]}>
-                      {isPaused ? 'Routine Status:' : 'Remaining Time:'}
+                      {countdown.label}
                     </Text>
                   </View>
 
@@ -2196,8 +2222,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 20,
-    minWidth: 88,
+    minWidth: 92,
     alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
   },
   timerPillNormal: {
     backgroundColor: '#208AEF',

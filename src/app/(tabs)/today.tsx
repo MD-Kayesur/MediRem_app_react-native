@@ -36,11 +36,6 @@ function getNextDoseTarget(timeStr?: string): Date {
       if (ampm === 'PM' && h < 12) h += 12;
       if (ampm === 'AM' && h === 12) h = 0;
       target.setHours(h, m, 0, 0);
-
-      // If scheduled time has already passed by more than 15 mins today, target tomorrow
-      if (target.getTime() < now.getTime() - 15 * 60 * 1000) {
-        target.setDate(target.getDate() + 1);
-      }
       return target;
     }
   }
@@ -52,33 +47,59 @@ function getNextDoseTarget(timeStr?: string): Date {
 function getCountdownInfo(timeStr: string | undefined, now: Date): {
   text: string;
   isDue: boolean;
+  isLate: boolean;
   isUrgent: boolean;
+  lateSecs: number;
 } {
   const target = getNextDoseTarget(timeStr);
   const diffMs = target.getTime() - now.getTime();
+  const pad = (n: number) => n.toString().padStart(2, '0');
 
-  if (diffMs <= 0 && diffMs >= -15 * 60 * 1000) {
-    return { text: 'Due Now! 🔔', isDue: true, isUrgent: true };
+  // If past scheduled dose time (LATE / OVERDUE!)
+  if (diffMs <= 0) {
+    const lateSecs = Math.floor(Math.abs(diffMs) / 1000);
+    const lateHours = Math.floor(lateSecs / 3600);
+    const lateMins = Math.floor((lateSecs % 3600) / 60);
+    const lateSecsRem = lateSecs % 60;
+
+    let lateText: string;
+    if (lateHours > 0) {
+      lateText = `Late: ${lateHours}h ${pad(lateMins)}m ${pad(lateSecsRem)}s`;
+    } else {
+      lateText = `Late: ${pad(lateMins)}m ${pad(lateSecsRem)}s`;
+    }
+
+    return {
+      text: lateText,
+      isDue: true,
+      isLate: true,
+      isUrgent: true,
+      lateSecs,
+    };
   }
 
+  // Future scheduled dose time (REMAINING TIME!)
   const totalSecs = Math.max(0, Math.floor(diffMs / 1000));
   const hours = Math.floor(totalSecs / 3600);
   const mins = Math.floor((totalSecs % 3600) / 60);
   const secs = totalSecs % 60;
-  const pad = (n: number) => n.toString().padStart(2, '0');
 
   if (hours > 0) {
     return {
       text: `${hours}h ${pad(mins)}m ${pad(secs)}s`,
       isDue: false,
+      isLate: false,
       isUrgent: false,
+      lateSecs: 0,
     };
   }
 
   return {
     text: `${pad(mins)}m ${pad(secs)}s`,
     isDue: false,
+    isLate: false,
     isUrgent: mins <= 10,
+    lateSecs: 0,
   };
 }
 
