@@ -138,7 +138,7 @@ const TIME_SLOTS: {
   { slot: 'Night', defaultTime: '10:00 PM', icon: 'moon', color: '#6366F1' },
 ];
 
-function getNextDoseTarget(timeStr?: string): Date {
+function getNextDoseTarget(timeStr?: string, isDoneToday: boolean = false): Date {
   const now = new Date();
   const target = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
@@ -152,6 +152,12 @@ function getNextDoseTarget(timeStr?: string): Date {
       if (ampm === 'AM' && h === 12) h = 0;
       target.setHours(h, m, 0, 0);
 
+      // If dose is taken/stopped for today, target tomorrow!
+      if (isDoneToday) {
+        target.setDate(target.getDate() + 1);
+        return target;
+      }
+
       // If scheduled time has already passed by more than 15 mins today, target tomorrow
       if (target.getTime() < now.getTime() - 15 * 60 * 1000) {
         target.setDate(target.getDate() + 1);
@@ -162,24 +168,57 @@ function getNextDoseTarget(timeStr?: string): Date {
 
   // Fallback to end of day if parse fails
   target.setHours(20, 0, 0, 0);
+  if (isDoneToday || target.getTime() < now.getTime()) {
+    target.setDate(target.getDate() + 1);
+  }
   return target;
 }
 
-function getCountdownInfo(timeStr: string | undefined, now: Date, isPaused: boolean): {
+function getCountdownInfo(
+  timeStr: string | undefined,
+  now: Date,
+  isPaused: boolean,
+  isDoneToday: boolean = false
+): {
   text: string;
   isDue: boolean;
   isUrgent: boolean;
+  isDoneToday: boolean;
 } {
   if (isPaused) {
-    return { text: 'Paused', isDue: false, isUrgent: false };
+    return { text: 'Paused', isDue: false, isUrgent: false, isDoneToday: false };
   }
 
-  const target = getNextDoseTarget(timeStr);
+  const target = getNextDoseTarget(timeStr, isDoneToday);
   const diffMs = target.getTime() - now.getTime();
+
+  // If already taken or permanently stopped for today, it is NEVER due!
+  if (isDoneToday) {
+    const totalSecs = Math.max(0, Math.floor(diffMs / 1000));
+    const hours = Math.floor(totalSecs / 3600);
+    const mins = Math.floor((totalSecs % 3600) / 60);
+    const secs = totalSecs % 60;
+    const pad = (n: number) => n.toString().padStart(2, '0');
+
+    if (hours > 0) {
+      return {
+        text: `${hours}h ${pad(mins)}m ${pad(secs)}s`,
+        isDue: false,
+        isUrgent: false,
+        isDoneToday: true,
+      };
+    }
+    return {
+      text: `${pad(mins)}m ${pad(secs)}s`,
+      isDue: false,
+      isUrgent: false,
+      isDoneToday: true,
+    };
+  }
 
   // If due within 15 mins or right now
   if (diffMs <= 0 && diffMs >= -15 * 60 * 1000) {
-    return { text: 'Due Now! 🔔', isDue: true, isUrgent: true };
+    return { text: 'Due Now! 🔔', isDue: true, isUrgent: true, isDoneToday: false };
   }
 
   const totalSecs = Math.max(0, Math.floor(diffMs / 1000));
@@ -194,6 +233,7 @@ function getCountdownInfo(timeStr: string | undefined, now: Date, isPaused: bool
       text: `${hours}h ${pad(mins)}m ${pad(secs)}s`,
       isDue: false,
       isUrgent: false,
+      isDoneToday: false,
     };
   }
 
@@ -201,7 +241,13 @@ function getCountdownInfo(timeStr: string | undefined, now: Date, isPaused: bool
     text: `${pad(mins)}m ${pad(secs)}s`,
     isDue: false,
     isUrgent: mins <= 10,
+    isDoneToday: false,
   };
+}
+
+function getDoseKey(medId: string, timeStr?: string, date?: Date): string {
+  const d = date || new Date();
+  return `${medId}_${d.toDateString()}_${timeStr || 'default'}`;
 }
 
 function getRoutineDurationInfo(startDateStr?: string, endDateStr?: string): {
@@ -270,6 +316,8 @@ export default function MedsScreen() {
 
   // Permanently stopped dose keys: will NEVER alarm again after 3 minutes
   const [permanentlyStoppedKeys, setPermanentlyStoppedKeys] = useState<Set<string>>(() => new Set());
+  // Dose keys that have been taken today
+  const [takenDoseKeys, setTakenDoseKeys] = useState<Set<string>>(() => new Set());
   const activeDoseKeyRef = useRef<string>('');
 
   // Subscribe to audio alarm playing state
@@ -321,13 +369,15 @@ export default function MedsScreen() {
   useEffect(() => {
     meds.forEach((med) => {
       if (med.status === 'active' && med.alarmEnabled !== false) {
-        const info = getCountdownInfo(med.time, currentTime, false);
+        const doseKey = getDoseKey(med.id, med.time, currentTime);
+        const isDone = takenDoseKeys.has(doseKey) || permanentlyStoppedKeys.has(doseKey);
+        // If already taken or permanently stopped for today, NEVER ring again!
+        if (isDone) {
+          return;
+        }
+
+        const info = getCountdownInfo(med.time, currentTime, false, false);
         if (info.isDue) {
-          const doseKey = `${med.id}_${currentTime.toDateString()}_${med.time}`;
-          // If already permanently stopped for today, NEVER ring again!
-          if (permanentlyStoppedKeys.has(doseKey)) {
-            return;
-          }
           // If not currently tracking this dose, trigger 1-minute continuous alarm
           if (activeAlarmMed?.id !== med.id) {
             activeDoseKeyRef.current = doseKey;
@@ -340,7 +390,7 @@ export default function MedsScreen() {
         }
       }
     });
-  }, [currentTime, meds, activeAlarmMed, permanentlyStoppedKeys]);
+  }, [currentTime, meds, activeAlarmMed, takenDoseKeys, permanentlyStoppedKeys]);
 
   // New med form state
   const [name, setName] = useState('');
@@ -395,6 +445,23 @@ export default function MedsScreen() {
   };
 
   const handleTakePillDose = (medId: string) => {
+    const med = meds.find((m) => m.id === medId);
+    if (!med) return;
+
+    const doseKey = getDoseKey(med.id, med.time, currentTime);
+
+    // If this med is ringing or snoozed, stop it immediately
+    if (activeAlarmMed?.id === medId) {
+      stopAudibleAlarm();
+      setIsAlarmModalVisible(false);
+      setActiveAlarmMed(null);
+      setIsSnoozed3m(false);
+    }
+
+    // Mark dose as taken and permanently stopped for today
+    setTakenDoseKeys((prev) => new Set(prev).add(doseKey));
+    setPermanentlyStoppedKeys((prev) => new Set(prev).add(doseKey));
+
     setMeds((prev) =>
       prev.map((m) => {
         if (m.id === medId && m.pillsLeft > 0) {
@@ -408,6 +475,11 @@ export default function MedsScreen() {
         }
         return m;
       })
+    );
+
+    Alert.alert(
+      'Dose Taken! 💊',
+      `You marked ${med.name} (${med.dosage}) as taken for today.\n\n✓ The red due alert is removed.\n✓ Alarm stopped permanently: will NOT alarm again today.\n✓ Next dose is scheduled for tomorrow at ${med.time}.`
     );
   };
 
@@ -466,10 +538,15 @@ export default function MedsScreen() {
     );
   };
 
-  // Start 1-minute continuous alarm ringing
+  // Start 1-minute continuous alarm ringing (for testing)
   const handleTriggerMedAlarm = (med: Medication) => {
-    const doseKey = `${med.id}_${currentTime.toDateString()}_${med.time}`;
+    const doseKey = getDoseKey(med.id, med.time, currentTime);
     setPermanentlyStoppedKeys((prev) => {
+      const next = new Set(prev);
+      next.delete(doseKey);
+      return next;
+    });
+    setTakenDoseKeys((prev) => {
       const next = new Set(prev);
       next.delete(doseKey);
       return next;
@@ -482,10 +559,11 @@ export default function MedsScreen() {
     triggerAudibleAlarm();
   };
 
-  // Permanently stop when taking the dose: will NEVER repeat after 3 minutes
+  // Permanently stop when taking the dose: will NEVER repeat after 3 minutes & removes red due alert
   const handleTakeAlarmDosePermanent = (med: Medication) => {
     stopAudibleAlarm();
-    const doseKey = activeDoseKeyRef.current || `${med.id}_${currentTime.toDateString()}_${med.time}`;
+    const doseKey = activeDoseKeyRef.current || getDoseKey(med.id, med.time, currentTime);
+    setTakenDoseKeys((prev) => new Set(prev).add(doseKey));
     setPermanentlyStoppedKeys((prev) => new Set(prev).add(doseKey));
     setIsSnoozed3m(false);
     setIsAlarmModalVisible(false);
@@ -494,20 +572,24 @@ export default function MedsScreen() {
     setMeds((prev) =>
       prev.map((m) =>
         m.id === med.id
-          ? { ...m, pillsLeft: Math.max(0, m.pillsLeft - 1) }
+          ? {
+              ...m,
+              pillsLeft: Math.max(0, m.pillsLeft - 1),
+              refillWarning: m.pillsLeft - 1 <= 5 ? `Refill Alert: Only ${Math.max(0, m.pillsLeft - 1)} pills remaining!` : undefined,
+            }
           : m
       )
     );
     Alert.alert(
       'Dose Recorded! 💊',
-      `You marked ${med.name} (${med.dosage}) as taken.\n\nAlarm stopped permanently: it will NOT repeat after 3 minutes.`
+      `You marked ${med.name} (${med.dosage}) as taken.\n\n✓ The red due alert is removed.\n✓ Alarm stopped permanently: will NOT repeat or alarm again today.\n✓ Next dose scheduled for tomorrow at ${med.time}.`
     );
   };
 
-  // Permanently stop alarm: will NEVER repeat after 3 minutes
+  // Permanently stop alarm: will NEVER repeat after 3 minutes & removes red due alert
   const handleStopAlarmPermanent = () => {
     stopAudibleAlarm();
-    const key = activeDoseKeyRef.current || (activeAlarmMed ? `${activeAlarmMed.id}_${currentTime.toDateString()}_${activeAlarmMed.time}` : '');
+    const key = activeDoseKeyRef.current || (activeAlarmMed ? getDoseKey(activeAlarmMed.id, activeAlarmMed.time, currentTime) : '');
     if (key) {
       setPermanentlyStoppedKeys((prev) => new Set(prev).add(key));
     }
@@ -516,7 +598,7 @@ export default function MedsScreen() {
     setActiveAlarmMed(null);
     Alert.alert(
       'Alarm Stopped Permanently 🔕',
-      'The alarm is completely turned off for today\'s dose. It will NEVER alarm again after 3 minutes.'
+      'The alarm is completely turned off for today\'s dose.\n\n✓ The red due alert is removed.\n✓ It will NEVER alarm again today.'
     );
   };
 
@@ -852,10 +934,14 @@ export default function MedsScreen() {
         {filteredMeds.map((med) => {
           const supplyPercent = Math.min(100, Math.round((med.pillsLeft / med.totalPills) * 100));
           const isPaused = med.status === 'paused';
-          const countdown = getCountdownInfo(med.time, currentTime, isPaused);
+          const doseKey = getDoseKey(med.id, med.time, currentTime);
+          const isTakenToday = takenDoseKeys.has(doseKey);
+          const isStoppedToday = permanentlyStoppedKeys.has(doseKey);
+          const isDoneToday = isTakenToday || isStoppedToday;
+
+          // When dose is completed today, getCountdownInfo targets tomorrow with isDue=false!
+          const countdown = getCountdownInfo(med.time, currentTime, isPaused, isDoneToday);
           const durationInfo = getRoutineDurationInfo(med.startDate, med.endDate);
-          const doseKey = `${med.id}_${currentTime.toDateString()}_${med.time}`;
-          const isThisDoseStoppedPermanent = permanentlyStoppedKeys.has(doseKey);
           const isThisDoseRinging = isAlarmPlaying && activeAlarmMed?.id === med.id;
           const isThisDoseSnoozed3m = isSnoozed3m && activeAlarmMed?.id === med.id;
 
@@ -944,33 +1030,101 @@ export default function MedsScreen() {
               </View>
 
               {/* Live Remaining Time & Countdown Banner */}
-              {isThisDoseStoppedPermanent ? (
-                <View style={[styles.countdownBanner, styles.countdownBannerPaused]}>
+              {isDoneToday ? (
+                /* RED ALERT IS COMPLETELY HIDDEN ONCE DOSE IS TAKEN OR ALARM PERMANENTLY STOPPED! */
+                <View style={[styles.countdownBanner, styles.countdownBannerCompleted]}>
                   <View style={styles.countdownLeftRow}>
-                    <Ionicons name="checkmark-circle" size={15} color="#059669" />
-                    <Text style={[styles.countdownLabel, { color: '#059669' }]}>
-                      Dose Status:
+                    <Ionicons
+                      name={isTakenToday ? 'checkmark-circle' : 'notifications-off-circle'}
+                      size={16}
+                      color="#059669"
+                    />
+                    <Text style={[styles.countdownLabel, { color: '#059669', fontWeight: '700' }]}>
+                      {isTakenToday ? '✓ Dose Taken Today' : '🔕 Alarm Stopped Today'}
                     </Text>
                   </View>
-                  <View style={[styles.timerPill, { backgroundColor: '#DCFCE7' }]}>
-                    <Text style={[styles.timerText, { color: '#059669', fontWeight: '700' }]}>
-                      Completed (Stopped) ✓
+                  <View style={[styles.timerPill, styles.timerPillCompleted]}>
+                    <Ionicons name="time-outline" size={12} color="#059669" style={{ marginRight: 4 }} />
+                    <Text style={[styles.timerText, styles.timerTextCompleted]}>
+                      Next in {countdown.text}
                     </Text>
                   </View>
                 </View>
-              ) : (
+              ) : isThisDoseRinging || isThisDoseSnoozed3m || countdown.isDue ? (
+                /* RED DUE ALERT / RINGING / SNOOZE BANNER */
                 <TouchableOpacity
-                  onPress={() => (countdown.isDue || isThisDoseSnoozed3m || isThisDoseRinging) && handleOpenAlarmModal()}
-                  disabled={!countdown.isDue && !isThisDoseSnoozed3m && !isThisDoseRinging}
+                  onPress={handleOpenAlarmModal}
                   activeOpacity={0.8}
                   style={[
                     styles.countdownBanner,
                     isThisDoseRinging || countdown.isDue
                       ? styles.countdownBannerDue
-                      : isThisDoseSnoozed3m || countdown.isUrgent
-                      ? styles.countdownBannerUrgent
-                      : isPaused
+                      : styles.countdownBannerUrgent,
+                  ]}>
+                  <View style={styles.countdownLeftRow}>
+                    <Ionicons
+                      name={
+                        isThisDoseRinging
+                          ? 'volume-high'
+                          : isThisDoseSnoozed3m
+                          ? 'time'
+                          : 'notifications'
+                      }
+                      size={15}
+                      color={isThisDoseSnoozed3m ? '#D97706' : '#EF4444'}
+                    />
+                    <Text
+                      style={[
+                        styles.countdownLabel,
+                        isThisDoseSnoozed3m
+                          ? styles.countdownLabelUrgent
+                          : styles.countdownLabelDue,
+                      ]}>
+                      {isThisDoseRinging
+                        ? `Ringing (${ringSecondsLeft}s left):`
+                        : isThisDoseSnoozed3m
+                        ? `Snoozed (${Math.floor(snoozeSecondsLeft / 60)}:${(snoozeSecondsLeft % 60).toString().padStart(2, '0')}):`
+                        : 'Dose Alert (Tap to Stop):'}
+                    </Text>
+                  </View>
+
+                  <View
+                    style={[
+                      styles.timerPill,
+                      isThisDoseSnoozed3m
+                        ? styles.timerPillUrgent
+                        : styles.timerPillDue,
+                    ]}>
+                    <Ionicons
+                      name={isThisDoseSnoozed3m ? 'time' : 'volume-high'}
+                      size={13}
+                      color="#FFFFFF"
+                      style={{ marginRight: 4 }}
+                    />
+                    <Text
+                      style={[
+                        styles.timerText,
+                        isThisDoseSnoozed3m
+                          ? styles.timerTextUrgent
+                          : styles.timerTextDue,
+                      ]}>
+                      {isThisDoseRinging
+                        ? 'Due Now! 🔔'
+                        : isThisDoseSnoozed3m
+                        ? 'Stop Alarm'
+                        : 'Due Now! 🔔'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ) : (
+                /* NORMAL REMAINING TIME COUNTDOWN BANNER OR PAUSED */
+                <View
+                  style={[
+                    styles.countdownBanner,
+                    isPaused
                       ? styles.countdownBannerPaused
+                      : countdown.isUrgent
+                      ? styles.countdownBannerUrgent
                       : styles.countdownBannerNormal,
                   ]}>
                   <View style={styles.countdownLeftRow}>
@@ -978,12 +1132,6 @@ export default function MedsScreen() {
                       name={
                         isPaused
                           ? 'pause-circle-outline'
-                          : isThisDoseRinging
-                          ? 'volume-high'
-                          : isThisDoseSnoozed3m
-                          ? 'time'
-                          : countdown.isDue
-                          ? 'notifications'
                           : countdown.isUrgent
                           ? 'alarm-outline'
                           : 'timer-outline'
@@ -992,9 +1140,7 @@ export default function MedsScreen() {
                       color={
                         isPaused
                           ? '#94A3B8'
-                          : isThisDoseRinging || countdown.isDue
-                          ? '#EF4444'
-                          : isThisDoseSnoozed3m || countdown.isUrgent
+                          : countdown.isUrgent
                           ? '#D97706'
                           : '#208AEF'
                       }
@@ -1002,62 +1148,38 @@ export default function MedsScreen() {
                     <Text
                       style={[
                         styles.countdownLabel,
-                        isThisDoseRinging || countdown.isDue
-                          ? styles.countdownLabelDue
-                          : isThisDoseSnoozed3m || countdown.isUrgent
-                          ? styles.countdownLabelUrgent
-                          : isPaused
+                        isPaused
                           ? styles.countdownLabelPaused
+                          : countdown.isUrgent
+                          ? styles.countdownLabelUrgent
                           : styles.countdownLabelNormal,
                       ]}>
-                      {isPaused
-                        ? 'Routine Status:'
-                        : isThisDoseRinging
-                        ? `Ringing (${ringSecondsLeft}s left):`
-                        : isThisDoseSnoozed3m
-                        ? `Snoozed (${Math.floor(snoozeSecondsLeft / 60)}:${(snoozeSecondsLeft % 60).toString().padStart(2, '0')}):`
-                        : countdown.isDue
-                        ? 'Dose Alert (Tap to Ring):'
-                        : 'Remaining Time:'}
+                      {isPaused ? 'Routine Status:' : 'Remaining Time:'}
                     </Text>
                   </View>
 
                   <View
                     style={[
                       styles.timerPill,
-                      isThisDoseRinging || countdown.isDue
-                        ? styles.timerPillDue
-                        : isThisDoseSnoozed3m || countdown.isUrgent
-                        ? styles.timerPillUrgent
-                        : isPaused
+                      isPaused
                         ? styles.timerPillPaused
+                        : countdown.isUrgent
+                        ? styles.timerPillUrgent
                         : styles.timerPillNormal,
                     ]}>
-                    {(isThisDoseRinging || countdown.isDue) && (
-                      <Ionicons name="volume-high" size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
-                    )}
-                    {isThisDoseSnoozed3m && (
-                      <Ionicons name="time" size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
-                    )}
                     <Text
                       style={[
                         styles.timerText,
-                        isThisDoseRinging || countdown.isDue
-                          ? styles.timerTextDue
-                          : isThisDoseSnoozed3m || countdown.isUrgent
-                          ? styles.timerTextUrgent
-                          : isPaused
+                        isPaused
                           ? styles.timerTextPaused
+                          : countdown.isUrgent
+                          ? styles.timerTextUrgent
                           : styles.timerTextNormal,
                       ]}>
-                      {isThisDoseRinging
-                        ? 'Due Now! 🔔'
-                        : isThisDoseSnoozed3m
-                        ? 'Stop Permanently'
-                        : countdown.text}
+                      {countdown.text}
                     </Text>
                   </View>
-                </TouchableOpacity>
+                </View>
               )}
 
               {/* Supply Progress & Pill Counter */}
@@ -2045,6 +2167,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
     borderColor: '#E2E8F0',
   },
+  countdownBannerCompleted: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+  },
   countdownLeftRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2085,6 +2211,15 @@ const styles = StyleSheet.create({
   timerPillPaused: {
     backgroundColor: '#94A3B8',
   },
+  timerPillCompleted: {
+    backgroundColor: '#DCFCE7',
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 110,
+  },
   timerText: {
     fontSize: 12,
     fontWeight: '800',
@@ -2101,6 +2236,9 @@ const styles = StyleSheet.create({
   },
   timerTextPaused: {
     color: '#FFFFFF',
+  },
+  timerTextCompleted: {
+    color: '#15803D',
   },
   supplyContainer: {
     marginTop: 6,
