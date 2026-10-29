@@ -18,7 +18,7 @@ import {
   useForgotPasswordMutation,
   useVerifyResetCodeMutation,
   useResetPasswordMutation,
-} from '@/store/api/authApi';
+} from '@/redux/api/authApi';
 
 type Step = 'request' | 'verify' | 'new_password' | 'success';
 

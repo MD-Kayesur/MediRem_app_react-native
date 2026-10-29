@@ -14,9 +14,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useSignInMutation } from '@/store/api/authApi';
-import { useAppDispatch } from '@/store/hooks';
-import { setCredentials, setGuestUser } from '@/store/slices/authSlice';
+import { useSignInMutation } from '@/redux/api/authApi';
+import { useAppDispatch } from '@/redux/hooks';
+import { setCredentials, setGuestUser } from '@/redux/slices/authSlice';
 
 export default function SignInScreen() {
   const dispatch = useAppDispatch();

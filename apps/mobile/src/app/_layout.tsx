@@ -7,7 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Provider } from 'react-redux';
-import { store } from '@/store';
+import { store } from '@/redux';
 
 import { Colors } from '@/constants/theme';
 import { initializeNotificationService } from '@/services/notification-service';

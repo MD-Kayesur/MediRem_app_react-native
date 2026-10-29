@@ -18,3 +18,10 @@ setupListeners(store.dispatch);
 
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;
+
+// Re-export hooks, api endpoints, and slice actions
+export * from './hooks';
+export * from './api/apiSlice';
+export * from './api/authApi';
+export * from './api/medicationsApi';
+export * from './slices/authSlice';

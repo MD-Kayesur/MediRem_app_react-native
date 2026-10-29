@@ -19,9 +19,9 @@ import {
   useSignUpMutation,
   useVerifySignupMutation,
   useResendSignupCodeMutation,
-} from '@/store/api/authApi';
-import { useAppDispatch } from '@/store/hooks';
-import { setGuestUser, setPendingEmail } from '@/store/slices/authSlice';
+} from '@/redux/api/authApi';
+import { useAppDispatch } from '@/redux/hooks';
+import { setGuestUser, setPendingEmail } from '@/redux/slices/authSlice';
 
 export default function SignUpScreen() {
   const dispatch = useAppDispatch();

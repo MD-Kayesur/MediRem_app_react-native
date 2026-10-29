@@ -13,8 +13,8 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { triggerAudibleAlarm, stopAudibleAlarm } from '@/services/sound-service';
 import { subscribeToAuth, getCurrentUser } from '@/services/auth-service';
-import { useAppSelector } from '@/store/hooks';
-import { selectCurrentUser } from '@/store/slices/authSlice';
+import { useAppSelector } from '@/redux/hooks';
+import { selectCurrentUser } from '@/redux/slices/authSlice';
 
 interface DoseItem {
   id: string;

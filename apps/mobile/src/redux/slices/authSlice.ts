@@ -104,3 +104,4 @@ export const selectPendingEmail = (state: { auth: AuthState }) =>
   state.auth.pendingEmail;
 
 export default authSlice.reducer;
+

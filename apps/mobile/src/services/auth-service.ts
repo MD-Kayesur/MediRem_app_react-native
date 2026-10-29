@@ -1,7 +1,7 @@
 import { AuthUser } from '@medirem/types';
 import { API_BASE_URL } from './api-service';
-import { store } from '@/store';
-import { setCredentials, logout as reduxLogout } from '@/store/slices/authSlice';
+import { store } from '@/redux';
+import { setCredentials, logout as reduxLogout } from '@/redux/slices/authSlice';
 
 export const DEFAULT_USER: AuthUser = {
   id: 'usr_rahman_default',
