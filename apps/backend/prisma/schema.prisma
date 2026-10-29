@@ -1,0 +1,54 @@
+// Prisma Schema for MediRem Medication Reminder System
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String        @id @default(uuid())
+  email       String?       @unique
+  name        String        @default("User")
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  medications Medication[]
+}
+
+model Medication {
+  id             String     @id @default(uuid())
+  name           String
+  dosage         String
+  instructions   String?
+  frequency      String     @default("Every day")
+  selectedDays   String?    // JSON array stored as string: e.g. ["Mon","Wed","Fri"]
+  startDate      String?
+  endDate        String?
+  time           String     @default("08:00 AM")
+  timeSlot       String     @default("Morning")
+  pillsLeft      Int        @default(30)
+  totalPills     Int        @default(30)
+  imageUri       String?
+  status         String     @default("active") // "active" | "paused"
+  alarmEnabled   Boolean    @default(true)
+  notificationId String?
+  userId         String?
+  user           User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  doseLogs       DoseLog[]
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+}
+
+model DoseLog {
+  id            String      @id @default(uuid())
+  medicationId  String
+  medication    Medication  @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+  scheduledTime String
+  takenAt       DateTime    @default(now())
+  status        String      @default("taken") // "taken" | "skipped" | "overdue"
+  note          String?
+  createdAt     DateTime    @default(now())
+}
+

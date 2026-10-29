@@ -1,0 +1,91 @@
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { CreateMedicationDto } from './dto/create-medication.dto';
+import { UpdateMedicationDto } from './dto/update-medication.dto';
+
+@Injectable()
+export class MedicationsService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async findAll() {
+    return this.prisma.medication.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: { doseLogs: true },
+    });
+  }
+
+  async findOne(id: string) {
+    const med = await this.prisma.medication.findUnique({
+      where: { id },
+      include: { doseLogs: true },
+    });
+    if (!med) {
+      throw new NotFoundException(`Medication with ID "${id}" not found`);
+    }
+    return med;
+  }
+
+  async create(dto: CreateMedicationDto) {
+    return this.prisma.medication.create({
+      data: {
+        name: dto.name,
+        dosage: dto.dosage,
+        instructions: dto.instructions ?? 'After food',
+        frequency: dto.frequency ?? 'Every day',
+        selectedDays: dto.selectedDays,
+        startDate: dto.startDate,
+        endDate: dto.endDate ?? 'Ongoing',
+        time: dto.time ?? '08:00 AM',
+        timeSlot: dto.timeSlot ?? 'Morning',
+        pillsLeft: dto.pillsLeft ?? 30,
+        totalPills: dto.totalPills ?? 30,
+        imageUri: dto.imageUri,
+        status: dto.status ?? 'active',
+        alarmEnabled: dto.alarmEnabled ?? true,
+        notificationId: dto.notificationId,
+        userId: dto.userId,
+      },
+    });
+  }
+
+  async update(id: string, dto: UpdateMedicationDto) {
+    await this.findOne(id);
+    return this.prisma.medication.update({
+      where: { id },
+      data: dto,
+    });
+  }
+
+  async remove(id: string) {
+    await this.findOne(id);
+    return this.prisma.medication.delete({
+      where: { id },
+    });
+  }
+
+  async takeDose(id: string) {
+    const med = await this.findOne(id);
+    const updatedPills = Math.max(0, med.pillsLeft - 1);
+
+    const [updatedMed, log] = await this.prisma.$transaction([
+      this.prisma.medication.update({
+        where: { id },
+        data: { pillsLeft: updatedPills },
+      }),
+      this.prisma.doseLog.create({
+        data: {
+          medicationId: id,
+          scheduledTime: med.time,
+          status: 'taken',
+        },
+      }),
+    ]);
+
+    return {
+      medication: updatedMed,
+      doseLog: log,
+      message: `Dose of ${med.name} marked as taken. Remaining pills: ${updatedPills}`,
+    };
+  }
+}
+

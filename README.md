@@ -36,15 +36,22 @@ A modern, high-precision medication reminder and inventory management mobile app
 
 ---
 
-## 🛠 Tech Stack
+## 🛠 Monorepo Tech Stack
 
+### 📱 Frontend (`apps/mobile`)
 - **Framework:** [React Native 0.88](https://reactnative.dev/) & [Expo SDK 58](https://expo.dev/)
 - **Navigation:** [Expo Router ~58.0.27](https://docs.expo.dev/router/introduction/) (File-based routing)
 - **Styling:** [NativeWind v4](https://www.nativewind.dev/) (Tailwind CSS)
 - **Audio & Haptics:** [`expo-audio ~58.0.10`](https://docs.expo.dev/versions/latest/sdk/audio/) & `react-native Vibration`
 - **Notifications:** [`expo-notifications ~58.1.6`](https://docs.expo.dev/versions/latest/sdk/notifications/)
 - **Camera & Gallery:** [`expo-image-picker ~58.0.10`](https://docs.expo.dev/versions/latest/sdk/image-picker/)
-- **Language:** TypeScript 6 & Strict Mode
+- **AI Chatbot:** Built-in interactive MediRem AI assistant
+
+### 🚀 Backend (`apps/backend`)
+- **Framework:** [NestJS 10](https://nestjs.com/) (TypeScript)
+- **ORM & Database:** [Prisma ORM 5](https://www.prisma.io/) with SQLite (configurable to PostgreSQL)
+- **Validation:** `class-validator` & `class-transformer`
+- **Architecture:** Modular architecture with `MedicationsModule`, `DosesModule`, `HealthModule`, and `PrismaModule`
 
 ---
 
@@ -52,6 +59,7 @@ A modern, high-precision medication reminder and inventory management mobile app
 
 ### Prerequisites
 - Node.js (v18 or higher)
+- npm (v9 or higher, with npm workspaces support)
 - Expo Go app on Android or iOS, or a physical device connected via USB
 
 ### Installation
@@ -61,45 +69,51 @@ A modern, high-precision medication reminder and inventory management mobile app
 git clone https://github.com/MD-Kayesur/MediRem_app_react-native.git
 cd MediRem_app_react-native
 
-# 2. Install dependencies
+# 2. Install monorepo dependencies
 npm install
 
-# 3. Start development server
-npx expo start
+# 3. Initialize Prisma database
+npm run prisma:migrate
+npm run prisma:generate
+
+# 4. Start NestJS Backend
+npm run backend:dev
+
+# 5. Start Expo Mobile App
+npm run mobile
 ```
 
 Scan the QR code with **Expo Go** (Android) or the Camera app (iOS) to launch the app instantly.
 
 ---
 
-## 📱 Project Structure
+## 📁 Monorepo Structure
 
 ```
-├── assets/
-│   ├── images/              # App icons, splash screens, and MediRem branding
-│   └── sounds/              # 44.1kHz uncompressed alarm chime (alarm.wav)
-├── scripts/
-│   ├── generate-alarm-sound.js       # Synthesizes high-clarity harmonic audio
-│   └── patch-expo-notifications.js   # Expo Go compatibility patches
-├── src/
-│   ├── app/
-│   │   ├── _layout.tsx      # Root application layout & provider setup
-│   │   ├── index.tsx        # Splash / initial redirect entry point
-│   │   └── (tabs)/
-│   │       ├── _layout.tsx  # Bottom tab bar navigator
-│   │       ├── today.tsx    # Daily dose checklist & live countdowns
-│   │       ├── meds.tsx     # Medication management, routines, & alarm modal
-│   │       ├── history.tsx  # Adherence history & logs
-│   │       └── profile.tsx  # User profile & preferences
-│   ├── components/
-│   │   └── date-time-picker-modal.tsx  # Interactive Calendar & Clock modals
-│   ├── services/
-│   │   ├── sound-service.ts            # expo-audio speaker alarm & vibration loop
-│   │   └── notification-service.ts     # Push notification scheduling
-│   └── global.css           # Tailwind CSS directives
-├── app.json                 # Expo configuration
-├── tailwind.config.js       # Tailwind CSS configuration
-└── tsconfig.json            # TypeScript configuration
+MediRem/
+├── package.json              # Monorepo root workspace configuration
+├── apps/
+│   ├── mobile/               # Expo React Native mobile application
+│   │   ├── src/
+│   │   │   ├── app/          # Expo Router screens (tabs, ai-chat, meds, history)
+│   │   │   ├── components/   # UI widgets & DateTime pickers
+│   │   │   ├── services/     # Audio, notifications & API services
+│   │   │   └── global.css    # Tailwind CSS
+│   │   ├── assets/           # App icons, splash screens, sounds
+│   │   ├── app.json          # Expo configuration
+│   │   └── package.json      # @medirem/mobile
+│   │
+│   └── backend/              # NestJS + Prisma ORM REST API
+│       ├── src/
+│       │   ├── medications/  # Medications CRUD & dose recording
+│       │   ├── doses/        # Dose history & compliance logs
+│       │   ├── health/       # Health check API (/api/health)
+│       │   ├── prisma/       # Prisma service & connection
+│       │   ├── app.module.ts # Root NestJS module
+│       │   └── main.ts       # NestJS entry point (port 3000)
+│       ├── prisma/
+│       │   └── schema.prisma # Prisma database schema
+│       └── package.json      # @medirem/backend
 ```
 
 ---

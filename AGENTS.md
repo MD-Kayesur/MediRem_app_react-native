@@ -1,24 +1,25 @@
-This is an Expo/React Native mobile application. Prioritize mobile-first patterns, performance, and cross-platform compatibility.
+This is a Monorepo containing an Expo/React Native mobile application (`apps/mobile`) and a NestJS + Prisma ORM backend (`apps/backend`). Prioritize mobile-first patterns, performance, and cross-platform compatibility.
 
-## Expo has changed — do not trust your training data
+## Monorepo Workspaces
 
-Expo ships breaking changes every SDK release. APIs you remember are likely renamed, moved, or removed. Before writing any code that touches an Expo, EAS, or React Native API:
+- `apps/mobile`: Expo SDK 58 React Native application (Expo Router, NativeWind).
+- `apps/backend`: NestJS 10 REST API with Prisma ORM 5 (Medications, Doses, Health).
 
-1. Read the major version of the `expo` package in `package.json`.
-2. Fetch the matching versioned docs: `https://docs.expo.dev/versions/v<major>.0.0/`
-3. For anything else, fetch https://docs.expo.dev/llms.txt — an index of all Expo docs with corrections to common LLM misconceptions. Follow its links to the specific page you need; never answer from memory.
+## Monorepo Commands
 
-## Commands
-
-Use `bunx` instead of `npx` if the project uses bun (`bun.lock` present).
-
+From root:
 ```bash
-npx expo install <package>  # ALWAYS use instead of npm/yarn/pnpm/bun add — resolves SDK-compatible versions
-npx expo start              # start the dev server
-npx expo lint               # lint
-npx tsc --noEmit            # typecheck
-npx expo-doctor             # diagnose dependency and config issues
-npx expo install --fix      # fix incompatible package versions
+npm run mobile          # start mobile Expo dev server
+npm run backend:dev     # start NestJS backend in watch mode
+npm run prisma:generate # generate Prisma client
+npm run prisma:migrate  # sync Prisma schema with database
+```
+
+For mobile-specific commands, run inside `apps/mobile`:
+```bash
+npx expo start          # start the dev server
+npx expo lint           # lint
+npx tsc --noEmit        # typecheck
 ```
 
 Run lint and typecheck before declaring any task done.

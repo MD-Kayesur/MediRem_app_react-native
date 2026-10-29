@@ -32,6 +32,13 @@ yarn-error.*
 
 # local env files
 .env*.local
+.env
+
+# backend build & database
+apps/backend/dist/
+apps/backend/prisma/*.db
+apps/backend/prisma/*.db-journal
+*.db
 
 # typescript
 *.tsbuildinfo
