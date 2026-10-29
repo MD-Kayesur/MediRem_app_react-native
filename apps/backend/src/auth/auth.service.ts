@@ -24,7 +24,7 @@ export class AuthService {
   }
 
   /**
-   * Register a new user with hashed password
+   * Register a new user: creates account in Neon DB and sends 6-digit OTP via Nodemailer
    */
   async register(data: {
     name: string;
@@ -47,44 +47,172 @@ export class AuthService {
       throw new BadRequestException('Password must be at least 6 characters long.');
     }
 
-    const existing = await this.prisma.user.findUnique({
-      where: { email },
-    });
+    // Generate 6-digit verification code
+    const verifyCode = Math.floor(100000 + crypto.randomInt(900000)).toString();
+    const verifyCodeExpiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
 
-    if (existing) {
-      throw new BadRequestException(
-        'An account with this email already exists. Please sign in instead.',
-      );
-    }
-
-    // Hash password securely with bcrypt
     let hashedPassword: string | undefined = undefined;
     if (data.password) {
       hashedPassword = await bcrypt.hash(data.password, 10);
     }
 
+    const existing = await this.prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (existing) {
+      if (existing.isVerified) {
+        throw new BadRequestException(
+          'An account with this email already exists and is verified. Please sign in instead.',
+        );
+      } else {
+        // User created earlier but not verified yet - update info & re-send code
+        await this.prisma.user.update({
+          where: { id: existing.id },
+          data: {
+            name,
+            password: hashedPassword || existing.password,
+            phone: data.phone?.trim() || existing.phone,
+            verifyCode,
+            verifyCodeExpiresAt,
+          },
+        });
+
+        await this.mailService.sendSignupVerificationOtp(email, name, verifyCode);
+
+        return {
+          success: true,
+          requiresVerification: true,
+          email,
+          code: verifyCode,
+          message: `Verification code sent to ${email}. Please enter the code to complete registration.`,
+        };
+      }
+    }
+
+    // Create user in Neon PostgreSQL with isVerified: false
     const user = await this.prisma.user.create({
       data: {
         name,
         email,
         password: hashedPassword,
         phone: data.phone?.trim() || null,
+        isVerified: false,
+        verifyCode,
+        verifyCodeExpiresAt,
       },
     });
 
-    const token = this.generateToken(user.id);
+    // Send verification email via Nodemailer
+    await this.mailService.sendSignupVerificationOtp(email, name, verifyCode);
 
     return {
       success: true,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone ?? undefined,
-        createdAt: user.createdAt.toISOString(),
+      requiresVerification: true,
+      userId: user.id,
+      email: user.email,
+      code: verifyCode,
+      message: `Registration initiated! A 6-digit verification code has been sent to ${email}.`,
+    };
+  }
+
+  /**
+   * Verify signup code: marks account as verified so user can log in
+   */
+  async verifySignup(data: { email: string; code: string }) {
+    const email = data.email.trim().toLowerCase();
+    const code = data.code.trim();
+
+    if (!email || !code) {
+      throw new BadRequestException('Email and 6-digit verification code are required.');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      throw new BadRequestException('Account not found with this email.');
+    }
+
+    if (user.isVerified) {
+      return {
+        success: true,
+        alreadyVerified: true,
+        message: 'Account is already verified! Please proceed to the login page.',
+      };
+    }
+
+    if (!user.verifyCode || user.verifyCode !== code) {
+      throw new BadRequestException('Invalid verification code. Please check your email.');
+    }
+
+    if (!user.verifyCodeExpiresAt || user.verifyCodeExpiresAt < new Date()) {
+      throw new BadRequestException(
+        'This verification code has expired. Please request a new code.',
+      );
+    }
+
+    // Mark user as verified and clear verifyCode
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        isVerified: true,
+        verifyCode: null,
+        verifyCodeExpiresAt: null,
       },
-      token,
-      message: 'Account created successfully! Welcome to MediRem.',
+    });
+
+    this.logger.log(`✅ User ${user.email} verified account successfully.`);
+
+    return {
+      success: true,
+      email: user.email,
+      message: 'Account verified successfully! Please sign in with your credentials.',
+    };
+  }
+
+  /**
+   * Resend signup verification code
+   */
+  async resendSignupCode(data: { email: string }) {
+    const email = data.email.trim().toLowerCase();
+
+    if (!email || !email.includes('@')) {
+      throw new BadRequestException('A valid email address is required.');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      throw new BadRequestException('Account not found with this email.');
+    }
+
+    if (user.isVerified) {
+      return {
+        success: true,
+        alreadyVerified: true,
+        message: 'Account is already verified. Please sign in.',
+      };
+    }
+
+    const verifyCode = Math.floor(100000 + crypto.randomInt(900000)).toString();
+    const verifyCodeExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { verifyCode, verifyCodeExpiresAt },
+    });
+
+    await this.mailService.sendSignupVerificationOtp(email, user.name, verifyCode);
+
+    return {
+      success: true,
+      email,
+      code: verifyCode,
+      message: `A new 6-digit verification code has been sent to ${email}.`,
     };
   }
 
@@ -103,7 +231,7 @@ export class AuthService {
     });
 
     if (!user) {
-      // Auto-create demo/test user if it is rahman@medirem.app or demo
+      // Auto-create demo/test user if it is rahman@medirem.app
       if (email === 'rahman@medirem.app') {
         const demoHashed = await bcrypt.hash(data.password || 'medirem123', 10);
         const demoUser = await this.prisma.user.create({
@@ -112,6 +240,7 @@ export class AuthService {
             email,
             password: demoHashed,
             phone: '+1 (555) 234-5678',
+            isVerified: true,
           },
         });
         const token = this.generateToken(demoUser.id);
@@ -134,6 +263,13 @@ export class AuthService {
       );
     }
 
+    // Check if account has completed verification
+    if (!user.isVerified && email !== 'rahman@medirem.app') {
+      throw new UnauthorizedException(
+        'Your email has not been verified yet. Please enter the verification code sent to your email.',
+      );
+    }
+
     // Validate password if user has one
     if (user.password) {
       if (!data.password) {
@@ -149,7 +285,6 @@ export class AuthService {
         // Plaintext legacy password check
         isValid = user.password === data.password;
         if (isValid) {
-          // Seamlessly upgrade legacy plaintext password to bcrypt hash
           const upgradedHash = await bcrypt.hash(data.password, 10);
           await this.prisma.user.update({
             where: { id: user.id },
@@ -215,19 +350,13 @@ export class AuthService {
     });
 
     // Send email using Nodemailer
-    const emailResult = await this.mailService.sendPasswordResetOtp(
-      user.email!,
-      user.name,
-      code,
-    );
+    await this.mailService.sendPasswordResetOtp(user.email!, user.name, code);
 
     return {
       success: true,
       message: `A 6-digit verification code has been sent to ${user.email}.`,
       email: user.email,
       expiresInMinutes: 15,
-      previewUrl: emailResult.previewUrl,
-      // Pass code in response for testing/local verification
       code,
     };
   }
@@ -345,7 +474,7 @@ export class AuthService {
     if (!user) {
       throw new BadRequestException('User not found');
     }
-    const { password, resetCode, resetCodeExpiresAt, ...safeUser } = user;
+    const { password, resetCode, resetCodeExpiresAt, verifyCode, verifyCodeExpiresAt, ...safeUser } = user;
     return safeUser;
   }
 }

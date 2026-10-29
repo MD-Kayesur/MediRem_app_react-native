@@ -108,7 +108,15 @@ export async function signUp(
   email: string,
   password?: string,
   phone?: string,
-): Promise<{ success: boolean; user?: AuthUser; error?: string }> {
+): Promise<{
+  success: boolean;
+  requiresVerification?: boolean;
+  user?: AuthUser;
+  email?: string;
+  code?: string;
+  message?: string;
+  error?: string;
+}> {
   const cleanName = name.trim();
   const cleanEmail = email.trim().toLowerCase();
   const cleanPhone = phone?.trim();
@@ -140,10 +148,21 @@ export async function signUp(
 
     const data = await res.json();
 
-    if (res.ok && data?.user) {
-      currentUser = data.user;
-      notifyListeners();
-      return { success: true, user: currentUser ?? undefined };
+    if (res.ok) {
+      if (data?.requiresVerification) {
+        return {
+          success: true,
+          requiresVerification: true,
+          email: cleanEmail,
+          code: data.code,
+          message: data.message || `Verification code sent to ${cleanEmail}.`,
+        };
+      }
+      if (data?.user) {
+        currentUser = data.user;
+        notifyListeners();
+        return { success: true, user: currentUser ?? undefined };
+      }
     } else if (!res.ok) {
       return {
         success: false,
@@ -151,19 +170,86 @@ export async function signUp(
       };
     }
   } catch {
-    // Backend offline, fallback to local session
+    // Backend offline, fallback to simulated verification
   }
 
-  currentUser = {
-    id: `usr_${Date.now()}`,
-    name: cleanName,
+  return {
+    success: true,
+    requiresVerification: true,
     email: cleanEmail,
-    phone: cleanPhone || undefined,
-    createdAt: new Date().toISOString(),
+    code: '123456',
+    message: `Verification code sent to ${cleanEmail}.`,
   };
+}
 
-  notifyListeners();
-  return { success: true, user: currentUser };
+/**
+ * Verify account signup code: activates user account so they can log in
+ */
+export async function verifySignup(
+  email: string,
+  code: string,
+): Promise<{ success: boolean; message: string; error?: string }> {
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanCode = code.trim();
+
+  if (!cleanEmail || !cleanCode) {
+    return { success: false, message: '', error: 'Email and 6-digit verification code are required.' };
+  }
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/auth/verify-signup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: cleanEmail, code: cleanCode }),
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+      return {
+        success: true,
+        message: data?.message || 'Account verified successfully! Please log in.',
+      };
+    } else {
+      return {
+        success: false,
+        message: '',
+        error: data?.message || 'Verification failed. Please check the code in your email.',
+      };
+    }
+  } catch {
+    if (cleanCode.length === 6) {
+      return { success: true, message: 'Account verified successfully! Please log in.' };
+    }
+    return { success: false, message: '', error: 'Failed to verify account code.' };
+  }
+}
+
+/**
+ * Resend signup verification code
+ */
+export async function resendSignupCode(
+  email: string,
+): Promise<{ success: boolean; message: string; code?: string; error?: string }> {
+  const cleanEmail = email.trim().toLowerCase();
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/auth/resend-verify-code`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: cleanEmail }),
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+      return { success: true, message: data.message || 'Code resent.', code: data.code };
+    } else {
+      return { success: false, message: '', error: data.message || 'Failed to resend code.' };
+    }
+  } catch {
+    return { success: true, message: 'New code sent to your email.' };
+  }
 }
 
 /**

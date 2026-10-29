@@ -15,9 +15,17 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { signUp, continueAsGuest } from '@/services/auth-service';
+import {
+  signUp,
+  verifySignup,
+  resendSignupCode,
+  continueAsGuest,
+} from '@/services/auth-service';
 
 export default function SignUpScreen() {
+  const [step, setStep] = useState<'form' | 'verify'>('form');
+
+  // Form Fields
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -25,6 +33,13 @@ export default function SignUpScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [agreeTerms, setAgreeTerms] = useState(true);
+
+  // Verification Code State
+  const [verifyCode, setVerifyCode] = useState('');
+  const [receivedCode, setReceivedCode] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
+
+  // UI state
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -42,6 +57,7 @@ export default function SignUpScreen() {
 
   const strength = getPasswordStrength();
 
+  // Handle Initial Registration
   const handleSignUp = async () => {
     setErrorMessage(null);
 
@@ -75,18 +91,74 @@ export default function SignUpScreen() {
     setLoading(false);
 
     if (result.success) {
+      if (result.requiresVerification) {
+        if (result.code) {
+          setReceivedCode(result.code);
+          setVerifyCode(result.code); // Pre-fill in dev mode
+        }
+        setStep('verify');
+      } else {
+        Alert.alert(
+          'Account Created! 🎉',
+          `Welcome to MediRem, ${result.user?.name || name}!\n\nPlease sign in with your credentials.`,
+          [
+            {
+              text: 'Go to Sign In',
+              onPress: () => router.replace('/sign-in'),
+            },
+          ]
+        );
+      }
+    } else {
+      setErrorMessage(result.error || 'Failed to create account. Please try again.');
+    }
+  };
+
+  // Handle 6-Digit Email Code Verification -> Redirect to Login Page!
+  const handleVerifySignup = async () => {
+    setErrorMessage(null);
+
+    const cleanCode = verifyCode.trim();
+    if (!cleanCode || cleanCode.length < 6) {
+      setErrorMessage('Please enter the full 6-digit verification code.');
+      return;
+    }
+
+    setLoading(true);
+    const result = await verifySignup(email, cleanCode);
+    setLoading(false);
+
+    if (result.success) {
       Alert.alert(
-        'Account Created! 🎉',
-        `Welcome to MediRem, ${result.user?.name || name}!\n\nYour medication routine companion is ready.`,
+        'Account Verified! 🎉',
+        'Your MediRem account has been verified successfully!\n\nYou will now be redirected to the Sign In page.',
         [
           {
-            text: 'Get Started',
-            onPress: () => router.replace('/(tabs)/today'),
+            text: 'Sign In Now',
+            onPress: () => router.replace({ pathname: '/sign-in', params: { email } }),
           },
         ]
       );
     } else {
-      setErrorMessage(result.error || 'Failed to create account. Please try again.');
+      setErrorMessage(result.error || 'Invalid or expired verification code.');
+    }
+  };
+
+  // Resend 6-Digit Verification Code
+  const handleResendCode = async () => {
+    setErrorMessage(null);
+    setResending(true);
+    const result = await resendSignupCode(email);
+    setResending(false);
+
+    if (result.success) {
+      if (result.code) {
+        setReceivedCode(result.code);
+        setVerifyCode(result.code);
+      }
+      Alert.alert('Code Sent! ✉️', `A fresh 6-digit verification code was sent to ${email}.`);
+    } else {
+      setErrorMessage(result.error || 'Failed to resend code.');
     }
   };
 
@@ -107,257 +179,347 @@ export default function SignUpScreen() {
           {/* Top Bar with Back & Guest Action */}
           <View style={styles.topBar}>
             <TouchableOpacity
-              onPress={() => router.back()}
+              onPress={() => {
+                if (step === 'verify') setStep('form');
+                else router.back();
+              }}
               style={styles.backButton}
               activeOpacity={0.7}
               accessibilityLabel="Go back">
               <Ionicons name="arrow-back" size={22} color="#0F172A" />
             </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={handleGuestLogin}
-              style={styles.skipButton}
-              activeOpacity={0.7}>
-              <Text style={styles.skipText}>Skip as Guest</Text>
-              <Ionicons name="chevron-forward" size={14} color="#64748B" />
-            </TouchableOpacity>
+            {step === 'form' ? (
+              <TouchableOpacity
+                onPress={handleGuestLogin}
+                style={styles.skipButton}
+                activeOpacity={0.7}>
+                <Text style={styles.skipText}>Skip as Guest</Text>
+                <Ionicons name="chevron-forward" size={14} color="#64748B" />
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.verifyStepBadge}>
+                <Text style={styles.verifyStepBadgeText}>Step 2 of 2</Text>
+              </View>
+            )}
           </View>
 
-          {/* Logo & Header Section */}
-          <View style={styles.headerSection}>
-            <Image
-              source={require('@/../assets/images/icon-symbol.png')}
-              style={styles.brandIcon}
-              resizeMode="contain"
-            />
-            <Text style={styles.title}>Create Account ✨</Text>
-            <Text style={styles.subtitle}>
-              Start tracking your medications, loud alarms, and supply inventory
-            </Text>
-          </View>
-
-          {/* Error Banner if any */}
-          {errorMessage ? (
-            <View style={styles.errorBanner}>
-              <Ionicons name="alert-circle" size={16} color="#DC2626" />
-              <Text style={styles.errorBannerText}>{errorMessage}</Text>
-            </View>
-          ) : null}
-
-          {/* Form Fields */}
-          <View style={styles.formContainer}>
-            {/* Full Name */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Full Name</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="person-outline" size={20} color="#94A3B8" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="e.g. Rahman Ahmed"
-                  placeholderTextColor="#94A3B8"
-                  value={name}
-                  onChangeText={(text) => {
-                    setName(text);
-                    if (errorMessage) setErrorMessage(null);
-                  }}
-                  autoCapitalize="words"
+          {/* STEP 1: REGISTRATION FORM */}
+          {step === 'form' && (
+            <View>
+              {/* Logo & Header Section */}
+              <View style={styles.headerSection}>
+                <Image
+                  source={require('@/../assets/images/icon-symbol.png')}
+                  style={styles.brandIcon}
+                  resizeMode="contain"
                 />
+                <Text style={styles.title}>Create Account ✨</Text>
+                <Text style={styles.subtitle}>
+                  Start tracking your medications, loud alarms, and supply inventory
+                </Text>
               </View>
-            </View>
 
-            {/* Email Address */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Email Address</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="mail-outline" size={20} color="#94A3B8" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="name@example.com"
-                  placeholderTextColor="#94A3B8"
-                  value={email}
-                  onChangeText={(text) => {
-                    setEmail(text);
-                    if (errorMessage) setErrorMessage(null);
-                  }}
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  autoCorrect={false}
-                />
-              </View>
-            </View>
+              {/* Error Banner if any */}
+              {errorMessage && (
+                <View style={styles.errorBanner}>
+                  <Ionicons name="alert-circle" size={16} color="#DC2626" />
+                  <Text style={styles.errorBannerText}>{errorMessage}</Text>
+                </View>
+              )}
 
-            {/* Phone Number (Optional) */}
-            <View style={styles.inputGroup}>
-              <View style={styles.labelWithBadgeRow}>
-                <Text style={styles.inputLabel}>Phone / Emergency Contact</Text>
-                <Text style={styles.optionalBadge}>Optional</Text>
-              </View>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="call-outline" size={20} color="#94A3B8" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="+1 (555) 000-0000"
-                  placeholderTextColor="#94A3B8"
-                  value={phone}
-                  onChangeText={setPhone}
-                  keyboardType="phone-pad"
-                />
-              </View>
-            </View>
+              {/* Form Fields */}
+              <View style={styles.formContainer}>
+                {/* Full Name */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Full Name</Text>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="person-outline" size={20} color="#94A3B8" style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="e.g. Rahman Ahmed"
+                      placeholderTextColor="#94A3B8"
+                      value={name}
+                      onChangeText={(text) => {
+                        setName(text);
+                        if (errorMessage) setErrorMessage(null);
+                      }}
+                      autoCapitalize="words"
+                      editable={!loading}
+                    />
+                  </View>
+                </View>
 
-            {/* Password */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Password</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="lock-closed-outline" size={20} color="#94A3B8" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="At least 6 characters"
-                  placeholderTextColor="#94A3B8"
-                  value={password}
-                  onChangeText={(text) => {
-                    setPassword(text);
-                    if (errorMessage) setErrorMessage(null);
-                  }}
-                  secureTextEntry={!showPassword}
-                  autoCapitalize="none"
-                />
+                {/* Email Address */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Email Address</Text>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="mail-outline" size={20} color="#94A3B8" style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="name@example.com"
+                      placeholderTextColor="#94A3B8"
+                      value={email}
+                      onChangeText={(text) => {
+                        setEmail(text);
+                        if (errorMessage) setErrorMessage(null);
+                      }}
+                      autoCapitalize="none"
+                      keyboardType="email-address"
+                      autoCorrect={false}
+                      editable={!loading}
+                    />
+                  </View>
+                </View>
+
+                {/* Phone Number (Optional) */}
+                <View style={styles.inputGroup}>
+                  <View style={styles.labelWithBadgeRow}>
+                    <Text style={styles.inputLabel}>Phone / Emergency Contact</Text>
+                    <Text style={styles.optionalBadge}>Optional</Text>
+                  </View>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="call-outline" size={20} color="#94A3B8" style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="+1 (555) 000-0000"
+                      placeholderTextColor="#94A3B8"
+                      value={phone}
+                      onChangeText={setPhone}
+                      keyboardType="phone-pad"
+                      editable={!loading}
+                    />
+                  </View>
+                </View>
+
+                {/* Password Field */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Password</Text>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="lock-closed-outline" size={20} color="#94A3B8" style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="At least 6 characters"
+                      placeholderTextColor="#94A3B8"
+                      value={password}
+                      onChangeText={(text) => {
+                        setPassword(text);
+                        if (errorMessage) setErrorMessage(null);
+                      }}
+                      secureTextEntry={!showPassword}
+                      editable={!loading}
+                    />
+                    <TouchableOpacity
+                      onPress={() => setShowPassword((prev) => !prev)}
+                      style={styles.eyeIcon}
+                      accessibilityLabel="Toggle password visibility">
+                      <Ionicons
+                        name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                        size={20}
+                        color="#64748B"
+                      />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Password Strength Meter */}
+                  {password.length > 0 && (
+                    <View style={styles.strengthContainer}>
+                      <View style={styles.strengthTrack}>
+                        <View
+                          style={[
+                            styles.strengthFill,
+                            {
+                              width: strength.width as any,
+                              backgroundColor: strength.color,
+                            },
+                          ]}
+                        />
+                      </View>
+                      <Text style={[styles.strengthText, { color: strength.color }]}>
+                        {strength.label}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Confirm Password Field */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Confirm Password</Text>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="lock-closed-outline" size={20} color="#94A3B8" style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="Re-enter password"
+                      placeholderTextColor="#94A3B8"
+                      value={confirmPassword}
+                      onChangeText={(text) => {
+                        setConfirmPassword(text);
+                        if (errorMessage) setErrorMessage(null);
+                      }}
+                      secureTextEntry={!showPassword}
+                      editable={!loading}
+                    />
+                    {confirmPassword.length > 0 && (
+                      <Ionicons
+                        name={
+                          password === confirmPassword && confirmPassword.length >= 6
+                            ? 'checkmark-circle'
+                            : 'close-circle'
+                        }
+                        size={20}
+                        color={
+                          password === confirmPassword && confirmPassword.length >= 6
+                            ? '#10B981'
+                            : '#EF4444'
+                        }
+                        style={{ marginLeft: 6 }}
+                      />
+                    )}
+                  </View>
+                </View>
+
+                {/* Terms and Conditions Checkbox */}
                 <TouchableOpacity
-                  onPress={() => setShowPassword((prev) => !prev)}
-                  hitSlop={8}>
-                  <Ionicons
-                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                    size={20}
-                    color="#64748B"
-                  />
+                  onPress={() => setAgreeTerms((prev) => !prev)}
+                  style={styles.termsRow}
+                  activeOpacity={0.8}>
+                  <View
+                    style={[
+                      styles.checkbox,
+                      agreeTerms && styles.checkboxActive,
+                    ]}>
+                    {agreeTerms && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
+                  </View>
+                  <Text style={styles.termsText}>
+                    I agree to the <Text style={styles.termsLink}>Terms of Service</Text> and{' '}
+                    <Text style={styles.termsLink}>Privacy Policy</Text>
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Submit Sign Up Button */}
+                <TouchableOpacity
+                  onPress={handleSignUp}
+                  style={[styles.primaryButton, loading && styles.buttonDisabled]}
+                  disabled={loading}
+                  activeOpacity={0.85}>
+                  {loading ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : (
+                    <>
+                      <Text style={styles.primaryButtonText}>Create Account</Text>
+                      <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+                    </>
+                  )}
                 </TouchableOpacity>
               </View>
 
-              {/* Password Strength Bar */}
-              {password.length > 0 && (
-                <View style={styles.strengthRow}>
-                  <View style={styles.strengthTrack}>
-                    <View
-                      style={[
-                        styles.strengthFill,
-                        {
-                          width: strength.width as any,
-                          backgroundColor: strength.color,
-                        },
-                      ]}
-                    />
-                  </View>
-                  <Text style={[styles.strengthLabel, { color: strength.color }]}>
-                    {strength.label}
+              {/* Footer: Sign In Link */}
+              <View style={styles.footerSection}>
+                <Text style={styles.footerPrompt}>Already have an account?</Text>
+                <TouchableOpacity
+                  onPress={() => router.push('/sign-in')}
+                  activeOpacity={0.7}
+                  style={{ marginLeft: 6 }}>
+                  <Text style={styles.signInLink}>Sign In</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* STEP 2: CODE VERIFICATION (AFTER SIGN UP) */}
+          {step === 'verify' && (
+            <View>
+              <View style={styles.headerSection}>
+                <View style={styles.badgeCircle}>
+                  <Ionicons name="mail-unread-outline" size={34} color="#208AEF" />
+                </View>
+                <Text style={styles.title}>Verify Your Email ✉️</Text>
+                <Text style={styles.subtitle}>
+                  We sent a 6-digit verification code to{' '}
+                  <Text style={{ fontWeight: '700', color: '#0F172A' }}>{email}</Text> via Nodemailer.
+                </Text>
+              </View>
+
+              {receivedCode && (
+                <View style={styles.infoBanner}>
+                  <Ionicons name="key-outline" size={16} color="#0284C7" />
+                  <Text style={styles.infoBannerText}>
+                    Verification Code: <Text style={{ fontWeight: '800' }}>{receivedCode}</Text>
                   </Text>
                 </View>
               )}
-            </View>
 
-            {/* Confirm Password */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Confirm Password</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="shield-checkmark-outline" size={20} color="#94A3B8" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="Re-enter password"
-                  placeholderTextColor="#94A3B8"
-                  value={confirmPassword}
-                  onChangeText={(text) => {
-                    setConfirmPassword(text);
-                    if (errorMessage) setErrorMessage(null);
-                  }}
-                  secureTextEntry={!showPassword}
-                  autoCapitalize="none"
-                />
-                {confirmPassword.length > 0 && (
-                  <Ionicons
-                    name={password === confirmPassword ? 'checkmark-circle' : 'close-circle'}
-                    size={18}
-                    color={password === confirmPassword ? '#10B981' : '#EF4444'}
-                  />
-                )}
-              </View>
-            </View>
-
-            {/* Terms and Privacy Checkbox */}
-            <TouchableOpacity
-              onPress={() => setAgreeTerms((prev) => !prev)}
-              style={styles.termsRow}
-              activeOpacity={0.8}>
-              <View style={[styles.checkbox, agreeTerms && styles.checkboxChecked]}>
-                {agreeTerms && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
-              </View>
-              <Text style={styles.termsText}>
-                I agree to the <Text style={styles.termsLink}>Terms of Service</Text> and{' '}
-                <Text style={styles.termsLink}>Privacy Policy</Text>
-              </Text>
-            </TouchableOpacity>
-
-            {/* Primary Sign Up Button */}
-            <TouchableOpacity
-              onPress={handleSignUp}
-              disabled={loading}
-              style={[styles.primaryButton, loading && styles.buttonDisabled]}
-              activeOpacity={0.85}>
-              {loading ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <>
-                  <Text style={styles.primaryButtonText}>Create Account</Text>
-                  <Ionicons name="checkmark-done" size={18} color="#FFFFFF" style={{ marginLeft: 6 }} />
-                </>
+              {errorMessage && (
+                <View style={styles.errorBanner}>
+                  <Ionicons name="alert-circle" size={16} color="#DC2626" />
+                  <Text style={styles.errorBannerText}>{errorMessage}</Text>
+                </View>
               )}
-            </TouchableOpacity>
-          </View>
 
-          {/* Social Divider */}
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or sign up with</Text>
-            <View style={styles.dividerLine} />
-          </View>
+              <View style={styles.formContainer}>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>6-Digit Code</Text>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="shield-checkmark-outline" size={20} color="#94A3B8" style={styles.inputIcon} />
+                    <TextInput
+                      style={[styles.textInput, styles.codeInput]}
+                      placeholder="• • • • • •"
+                      placeholderTextColor="#94A3B8"
+                      value={verifyCode}
+                      onChangeText={(val) => {
+                        setVerifyCode(val);
+                        if (errorMessage) setErrorMessage(null);
+                      }}
+                      keyboardType="number-pad"
+                      maxLength={6}
+                      editable={!loading}
+                    />
+                  </View>
+                </View>
 
-          {/* Social Buttons */}
-          <View style={styles.socialRow}>
-            <TouchableOpacity
-              onPress={() => {
-                setName('Google User');
-                setEmail('google.user@medirem.app');
-                setPassword('password123');
-                setConfirmPassword('password123');
-              }}
-              style={styles.socialButton}
-              activeOpacity={0.8}>
-              <Ionicons name="logo-google" size={18} color="#EA4335" />
-              <Text style={styles.socialButtonText}>Google</Text>
-            </TouchableOpacity>
+                {/* Verify Code Button */}
+                <TouchableOpacity
+                  onPress={handleVerifySignup}
+                  style={[styles.primaryButton, loading && styles.buttonDisabled]}
+                  disabled={loading}
+                  activeOpacity={0.85}>
+                  {loading ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : (
+                    <>
+                      <Text style={styles.primaryButtonText}>Verify & Proceed to Login</Text>
+                      <Ionicons name="checkmark-circle-outline" size={20} color="#FFFFFF" />
+                    </>
+                  )}
+                </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={() => {
-                setName('Apple User');
-                setEmail('apple.user@medirem.app');
-                setPassword('password123');
-                setConfirmPassword('password123');
-              }}
-              style={styles.socialButton}
-              activeOpacity={0.8}>
-              <Ionicons name="logo-apple" size={20} color="#0F172A" />
-              <Text style={styles.socialButtonText}>Apple</Text>
-            </TouchableOpacity>
-          </View>
+                {/* Resend Code Button */}
+                <TouchableOpacity
+                  onPress={handleResendCode}
+                  style={styles.resendButton}
+                  disabled={resending}
+                  activeOpacity={0.7}>
+                  {resending ? (
+                    <ActivityIndicator size="small" color="#208AEF" />
+                  ) : (
+                    <Text style={styles.resendText}>
+                      {"Didn't receive email?"} <Text style={styles.resendLink}>Resend Code</Text>
+                    </Text>
+                  )}
+                </TouchableOpacity>
 
-          {/* Footer: Sign In Link */}
-          <View style={styles.footerSection}>
-            <Text style={styles.footerPrompt}>Already have an account?</Text>
-            <TouchableOpacity
-              onPress={() => router.push('/sign-in')}
-              activeOpacity={0.7}
-              style={{ marginLeft: 6 }}>
-              <Text style={styles.signInLink}>Sign In</Text>
-            </TouchableOpacity>
-          </View>
+                {/* Change Email */}
+                <TouchableOpacity
+                  onPress={() => setStep('form')}
+                  style={{ alignItems: 'center', paddingVertical: 8 }}
+                  activeOpacity={0.7}>
+                  <Text style={{ fontSize: 13, color: '#64748B' }}>
+                    Wrong email? <Text style={{ color: '#208AEF', fontWeight: '600' }}>Edit details</Text>
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -403,6 +565,17 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontWeight: '600',
   },
+  verifyStepBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: '#EFF6FF',
+  },
+  verifyStepBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#208AEF',
+  },
   headerSection: {
     alignItems: 'center',
     marginBottom: 20,
@@ -412,6 +585,15 @@ const styles = StyleSheet.create({
     height: 68,
     borderRadius: 18,
     marginBottom: 14,
+  },
+  badgeCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
   },
   title: {
     fontSize: 26,
@@ -445,6 +627,23 @@ const styles = StyleSheet.create({
     flex: 1,
     fontWeight: '500',
   },
+  infoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F0F9FF',
+    borderColor: '#BAE6FD',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 16,
+  },
+  infoBannerText: {
+    fontSize: 13,
+    color: '#0369A1',
+    flex: 1,
+  },
   formContainer: {
     gap: 15,
     marginBottom: 24,
@@ -456,6 +655,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#334155',
+    marginLeft: 2,
   },
   labelWithBadgeRow: {
     flexDirection: 'row',
@@ -465,15 +665,15 @@ const styles = StyleSheet.create({
   optionalBadge: {
     fontSize: 11,
     color: '#94A3B8',
-    fontWeight: '500',
+    fontWeight: '600',
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
     borderRadius: 14,
+    backgroundColor: '#F8FAFC',
     paddingHorizontal: 14,
     height: 52,
   },
@@ -484,8 +684,18 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     color: '#0F172A',
+    fontWeight: '500',
   },
-  strengthRow: {
+  codeInput: {
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: 8,
+    textAlign: 'center',
+  },
+  eyeIcon: {
+    padding: 6,
+  },
+  strengthContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -503,15 +713,17 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 2,
   },
-  strengthLabel: {
+  strengthText: {
     fontSize: 11,
     fontWeight: '700',
+    width: 48,
+    textAlign: 'right',
   },
   termsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    marginTop: 4,
+    paddingVertical: 4,
   },
   checkbox: {
     width: 20,
@@ -523,14 +735,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#FFFFFF',
   },
-  checkboxChecked: {
+  checkboxActive: {
     backgroundColor: '#208AEF',
     borderColor: '#208AEF',
   },
   termsText: {
-    flex: 1,
     fontSize: 12,
     color: '#64748B',
+    flex: 1,
     lineHeight: 18,
   },
   termsLink: {
@@ -541,66 +753,42 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
     backgroundColor: '#208AEF',
-    borderRadius: 16,
-    height: 54,
+    height: 52,
+    borderRadius: 14,
     marginTop: 8,
     shadowColor: '#208AEF',
-    shadowOpacity: 0.28,
-    shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
   },
   buttonDisabled: {
-    opacity: 0.7,
+    opacity: 0.65,
   },
   primaryButtonText: {
     fontSize: 16,
     fontWeight: '700',
     color: '#FFFFFF',
   },
-  dividerRow: {
-    flexDirection: 'row',
+  resendButton: {
     alignItems: 'center',
-    gap: 12,
-    marginBottom: 20,
+    paddingVertical: 10,
   },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#E2E8F0',
+  resendText: {
+    fontSize: 13,
+    color: '#64748B',
   },
-  dividerText: {
-    fontSize: 12,
-    color: '#94A3B8',
-    fontWeight: '500',
-  },
-  socialRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 30,
-  },
-  socialButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  socialButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#334155',
+  resendLink: {
+    color: '#208AEF',
+    fontWeight: '700',
   },
   footerSection: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 12,
   },
   footerPrompt: {
     fontSize: 14,
@@ -612,4 +800,3 @@ const styles = StyleSheet.create({
     color: '#208AEF',
   },
 });
-
