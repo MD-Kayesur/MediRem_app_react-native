@@ -324,7 +324,6 @@ export default function MedsScreen() {
   const [filter, setFilter] = useState<'all' | 'active' | 'paused'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [editingMed, setEditingMed] = useState<Medication | null>(null);
   const [currentTime, setCurrentTime] = useState(() => new Date());
 
   // Live countdown timer ticker (ticks every 1s)
@@ -750,7 +749,6 @@ export default function MedsScreen() {
   };
 
   const handleOpenAddModal = () => {
-    setEditingMed(null);
     setName('');
     setDosage('');
     setInstructions('');
@@ -767,71 +765,6 @@ export default function MedsScreen() {
     setSelectedEndDate(null);
     setEndDateFormatted('Ongoing (No end date)');
     setAlarmEnabled(true);
-    setIsAddModalOpen(true);
-  };
-
-  const handleOpenEditModal = (med: Medication) => {
-    setEditingMed(med);
-    setName(med.name);
-    setDosage(med.dosage);
-    setInstructions(med.instructions || '');
-    setPillsCount(med.totalPills ? med.totalPills.toString() : '30');
-    setImageUri(med.imageUri || null);
-
-    // Determine frequency type
-    const freqLower = (med.frequency || '').toLowerCase();
-    if (freqLower.includes('weekdays') || freqLower.includes('mon – fri') || freqLower.includes('mon - fri')) {
-      setFrequencyType('weekdays');
-    } else if (freqLower.includes('as needed')) {
-      setFrequencyType('asneeded');
-    } else if (med.selectedDays && med.selectedDays.length > 0) {
-      setFrequencyType('specific');
-      setSelectedDays(med.selectedDays);
-    } else {
-      const foundDays = DAYS_OF_WEEK.filter((d) => med.frequency.includes(d.key)).map((d) => d.key);
-      if (foundDays.length > 0) {
-        setFrequencyType('specific');
-        setSelectedDays(foundDays);
-      } else {
-        setFrequencyType('everyday');
-      }
-    }
-
-    // Time & Slot
-    setCustomTime(med.time || '08:00 AM');
-    setSelectedTimeSlot(med.timeSlot || 'Morning');
-
-    // Dates
-    if (med.startDate) {
-      setStartDateFormatted(med.startDate);
-      const cleanStart = med.startDate.replace(/^.*,\s*/i, '').trim();
-      const parsedStart = new Date(cleanStart);
-      if (!isNaN(parsedStart.getTime())) {
-        setSelectedStartDate(parsedStart);
-      }
-    } else {
-      const now = new Date();
-      setSelectedStartDate(now);
-      setStartDateFormatted(`Today, ${formatDisplayDate(now)}`);
-    }
-
-    if (!med.endDate || med.endDate.toLowerCase().includes('ongoing')) {
-      setIsOngoing(true);
-      setEndDateFormatted('Ongoing (No end date)');
-      setSelectedEndDate(null);
-    } else {
-      setIsOngoing(false);
-      setEndDateFormatted(med.endDate);
-      const cleanEnd = med.endDate.replace(/^.*,\s*/i, '').trim();
-      const parsedEnd = new Date(cleanEnd);
-      if (!isNaN(parsedEnd.getTime())) {
-        setSelectedEndDate(parsedEnd);
-      } else {
-        setSelectedEndDate(null);
-      }
-    }
-
-    setAlarmEnabled(med.alarmEnabled !== false);
     setIsAddModalOpen(true);
   };
 
@@ -861,12 +794,6 @@ export default function MedsScreen() {
             // Remove from medications state
             setMeds((prev) => prev.filter((m) => m.id !== med.id));
 
-            // Close modal if editing this medication
-            if (editingMed?.id === med.id) {
-              setIsAddModalOpen(false);
-              setEditingMed(null);
-            }
-
             Alert.alert(
               'Medication Deleted 🗑️',
               `"${med.name}" has been removed from your routine.`
@@ -877,7 +804,7 @@ export default function MedsScreen() {
     );
   };
 
-  const handleSaveMedication = async () => {
+  const handleAddMedication = async () => {
     if (!name.trim()) {
       Alert.alert('Required Field', 'Please enter a medication name.');
       return;
@@ -888,132 +815,67 @@ export default function MedsScreen() {
     else if (frequencyType === 'asneeded') frequencyLabel = 'As needed';
     else if (frequencyType === 'specific') frequencyLabel = selectedDays.join(', ');
 
+    const newMedId = Date.now().toString();
     const finalTime = customTime.trim() || '08:00 AM';
     const finalStartDate = startDateFormatted;
     const finalEndDate = isOngoing ? 'Ongoing' : endDateFormatted;
     const totalPillsParsed = parseInt(pillsCount, 10) || 30;
 
-    if (editingMed) {
-      // EDIT MODE: Update existing routine
-      const medId = editingMed.id;
-      let notificationId = editingMed.notificationId;
-
-      // Reschedule or cancel notification if needed
-      if (editingMed.notificationId && (!alarmEnabled || editingMed.time !== finalTime)) {
-        await cancelMedicationReminder(editingMed.notificationId);
-        notificationId = undefined;
-      }
-
-      if (alarmEnabled && (!notificationId || editingMed.time !== finalTime)) {
-        const scheduledId = await scheduleMedicationReminder({
-          id: medId,
-          name: name.trim(),
-          dosage: dosage.trim() || '1 tablet',
-          timeStr: finalTime,
-          instructions: instructions.trim() || undefined,
-        });
-        if (scheduledId) {
-          notificationId = scheduledId;
-        }
-      }
-
-      const updatedPillsLeft = Math.min(editingMed.pillsLeft, totalPillsParsed);
-      const isLow = updatedPillsLeft <= 5 && updatedPillsLeft > 0;
-
-      const updatedMed: Medication = {
-        ...editingMed,
-        name: name.trim(),
-        dosage: dosage.trim() || '1 tablet',
-        instructions: instructions.trim() || 'After food',
-        frequency: frequencyLabel,
-        selectedDays: frequencyType === 'specific' ? selectedDays : undefined,
-        startDate: finalStartDate,
-        endDate: finalEndDate,
-        time: finalTime,
-        timeSlot: selectedTimeSlot,
-        nextDose: `Today, ${finalTime}`,
-        pillsLeft: updatedPillsLeft,
-        totalPills: totalPillsParsed,
-        imageUri: imageUri ?? undefined,
-        refillWarning: isLow ? `Refill Alert: Only ${updatedPillsLeft} pills remaining!` : undefined,
-        alarmEnabled,
-        notificationId,
-      };
-
-      setMeds((prev) => prev.map((m) => (m.id === medId ? updatedMed : m)));
-
-      // If active alarm is playing for this med, update activeAlarmMed
-      if (activeAlarmMed?.id === medId) {
-        setActiveAlarmMed(updatedMed);
-      }
-
-      setEditingMed(null);
-      setIsAddModalOpen(false);
-
-      Alert.alert(
-        'Medication Updated! ✓',
-        `Changes to "${name.trim()} (${dosage.trim() || '1 tablet'})" have been saved.`
-      );
-    } else {
-      // ADD MODE: Create new routine
-      const newMedId = Date.now().toString();
-      let notificationId: string | undefined;
-
-      if (alarmEnabled) {
-        const scheduledId = await scheduleMedicationReminder({
-          id: newMedId,
-          name: name.trim(),
-          dosage: dosage.trim() || '1 tablet',
-          timeStr: finalTime,
-          instructions: instructions.trim() || undefined,
-        });
-        if (scheduledId) {
-          notificationId = scheduledId;
-        }
-      }
-
-      const newMed: Medication = {
+    let notificationId: string | undefined;
+    if (alarmEnabled) {
+      const scheduledId = await scheduleMedicationReminder({
         id: newMedId,
         name: name.trim(),
         dosage: dosage.trim() || '1 tablet',
-        instructions: instructions.trim() || 'After food',
-        frequency: frequencyLabel,
-        selectedDays: frequencyType === 'specific' ? selectedDays : undefined,
-        startDate: finalStartDate,
-        endDate: finalEndDate,
-        time: finalTime,
-        timeSlot: selectedTimeSlot,
-        nextDose: `Today, ${finalTime}`,
-        pillsLeft: totalPillsParsed,
-        totalPills: totalPillsParsed,
-        imageUri: imageUri ?? undefined,
-        status: 'active',
-        alarmEnabled,
-        notificationId,
-      };
-
-      setMeds([newMed, ...meds]);
-
-      // Reset form
-      setName('');
-      setDosage('');
-      setInstructions('');
-      setPillsCount('30');
-      setImageUri(null);
-      setFrequencyType('everyday');
-      setIsAddModalOpen(false);
-
-      if (alarmEnabled) {
-        Alert.alert(
-          'Medication & Alarm Scheduled! 🔔',
-          `"${name.trim()} (${dosage.trim() || '1 tablet'})" is scheduled for ${finalTime}.\n\n📅 Duration: ${finalStartDate} → ${finalEndDate}\n🔔 Push notification alarm is set.`
-        );
-      } else {
-        Alert.alert(
-          'Medication Saved!',
-          `"${name.trim()}" added to your medication routine.`
-        );
+        timeStr: finalTime,
+        instructions: instructions.trim() || undefined,
+      });
+      if (scheduledId) {
+        notificationId = scheduledId;
       }
+    }
+
+    const newMed: Medication = {
+      id: newMedId,
+      name: name.trim(),
+      dosage: dosage.trim() || '1 tablet',
+      instructions: instructions.trim() || 'After food',
+      frequency: frequencyLabel,
+      selectedDays: frequencyType === 'specific' ? selectedDays : undefined,
+      startDate: finalStartDate,
+      endDate: finalEndDate,
+      time: finalTime,
+      timeSlot: selectedTimeSlot,
+      nextDose: `Today, ${finalTime}`,
+      pillsLeft: totalPillsParsed,
+      totalPills: totalPillsParsed,
+      imageUri: imageUri ?? undefined,
+      status: 'active',
+      alarmEnabled,
+      notificationId,
+    };
+
+    setMeds([newMed, ...meds]);
+
+    // Reset form
+    setName('');
+    setDosage('');
+    setInstructions('');
+    setPillsCount('30');
+    setImageUri(null);
+    setFrequencyType('everyday');
+    setIsAddModalOpen(false);
+
+    if (alarmEnabled) {
+      Alert.alert(
+        'Medication & Alarm Scheduled! 🔔',
+        `"${name.trim()} (${dosage.trim() || '1 tablet'})" is scheduled for ${finalTime}.\n\n📅 Duration: ${finalStartDate} → ${finalEndDate}\n🔔 Push notification alarm is set.`
+      );
+    } else {
+      Alert.alert(
+        'Medication Saved!',
+        `"${name.trim()}" added to your medication routine.`
+      );
     }
   };
 
@@ -1200,7 +1062,7 @@ export default function MedsScreen() {
                   </View>
                 </View>
 
-                {/* Top Actions: Status badge, Edit, and Delete buttons */}
+                {/* Top Actions: Status badge and Delete button */}
                 <View style={styles.cardTopActions}>
                   {/* Pause / Resume Button */}
                   <TouchableOpacity
@@ -1212,16 +1074,6 @@ export default function MedsScreen() {
                       style={{ color: isPaused ? '#B45309' : '#475569' }}>
                       {isPaused ? 'Paused' : 'Active'}
                     </Text>
-                  </TouchableOpacity>
-
-                  {/* Edit Routine Button */}
-                  <TouchableOpacity
-                    onPress={() => handleOpenEditModal(med)}
-                    style={styles.cardActionIconBtn}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    activeOpacity={0.75}
-                    accessibilityLabel={`Edit ${med.name}`}>
-                    <Ionicons name="pencil" size={13} color="#208AEF" />
                   </TouchableOpacity>
 
                   {/* Delete Routine Button */}
@@ -1596,21 +1448,14 @@ export default function MedsScreen() {
             <View className="flex-row justify-between items-center mb-4 pb-2 border-b border-slate-100 dark:border-slate-800">
               <View className="flex-row items-center gap-2">
                 <View className="w-8 h-8 rounded-lg bg-blue-50 items-center justify-center">
-                  <MaterialCommunityIcons
-                    name={editingMed ? 'pencil-box-outline' : 'pill'}
-                    size={18}
-                    color="#208AEF"
-                  />
+                  <MaterialCommunityIcons name="pill" size={18} color="#208AEF" />
                 </View>
                 <Text className="text-xl font-black text-slate-900 dark:text-white" style={styles.modalTitle}>
-                  {editingMed ? 'Edit Medication' : 'Add Medication'}
+                  Add Medication
                 </Text>
               </View>
               <TouchableOpacity
-                onPress={() => {
-                  setIsAddModalOpen(false);
-                  setEditingMed(null);
-                }}
+                onPress={() => setIsAddModalOpen(false)}
                 style={styles.closeBtn}>
                 <Ionicons name="close" size={24} color="#64748B" />
               </TouchableOpacity>
@@ -2027,35 +1872,17 @@ export default function MedsScreen() {
                 </View>
               </View>
 
-              {/* Save / Update Button */}
+              {/* Save Button */}
               <TouchableOpacity
-                onPress={handleSaveMedication}
+                onPress={handleAddMedication}
                 className="w-full h-14 rounded-full bg-primary flex-row items-center justify-center shadow-md active:opacity-90"
                 style={styles.saveBtn}
                 activeOpacity={0.85}>
-                <Ionicons
-                  name={editingMed ? 'checkmark-done-circle' : 'checkmark-circle'}
-                  size={20}
-                  color="#FFFFFF"
-                  style={{ marginRight: 8 }}
-                />
+                <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
                 <Text className="text-white font-bold text-base" style={styles.saveBtnText}>
-                  {editingMed ? 'Update Medication Routine' : 'Save Medication Routine'}
+                  Save Medication Routine
                 </Text>
               </TouchableOpacity>
-
-              {/* Delete Button (shown when editing an existing routine) */}
-              {editingMed && (
-                <TouchableOpacity
-                  onPress={() => handleDeleteMedication(editingMed)}
-                  style={styles.modalDeleteBtn}
-                  activeOpacity={0.85}>
-                  <Ionicons name="trash-outline" size={17} color="#EF4444" style={{ marginRight: 6 }} />
-                  <Text style={styles.modalDeleteBtnText}>
-                    Delete Medication Routine
-                  </Text>
-                </TouchableOpacity>
-              )}
             </ScrollView>
           </View>
         </View>
@@ -2402,16 +2229,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-  },
-  cardActionIconBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   cardDeleteIconBtn: {
     width: 28,
@@ -2881,23 +2698,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 16,
-  },
-  modalDeleteBtn: {
-    width: '100%',
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FCA5A5',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 10,
-  },
-  modalDeleteBtnText: {
-    color: '#EF4444',
-    fontSize: 14,
-    fontWeight: '700',
   },
   datesAlarmRow: {
     flexDirection: 'row',
