@@ -2,10 +2,16 @@
   "name": "medirem-monorepo",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "npm@10.9.3",
   "workspaces": [
-    "apps/*"
+    "apps/*",
+    "packages/*"
   ],
   "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
     "start": "npm run mobile",
     "mobile": "npm --workspace=@medirem/mobile run start",
     "mobile:android": "npm --workspace=@medirem/mobile run android",
@@ -19,5 +25,8 @@
     "prisma:generate": "npm --workspace=@medirem/backend run prisma:generate",
     "prisma:migrate": "npm --workspace=@medirem/backend run prisma:migrate",
     "prisma:studio": "npm --workspace=@medirem/backend run prisma:studio"
+  },
+  "devDependencies": {
+    "turbo": "^2.4.4"
   }
 }

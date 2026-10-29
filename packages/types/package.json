@@ -1,0 +1,20 @@
+{
+  "name": "@medirem/types",
+  "version": "1.0.0",
+  "description": "Shared TypeScript types and interfaces for MediRem Monorepo",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rimraf dist"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}
+

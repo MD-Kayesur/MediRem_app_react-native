@@ -36,7 +36,12 @@ A modern, high-precision medication reminder and inventory management mobile app
 
 ---
 
-## 🛠 Monorepo Tech Stack
+## 🛠 Monorepo Tech Stack (Powered by Turborepo)
+
+- **Monorepo Engine:** [Turborepo 2](https://turbo.build/)
+- **Workspaces:** `apps/*` and `packages/*`
+- **Shared Types:** `@medirem/types` in `packages/types`
+- **Shared Config:** `@medirem/typescript-config` in `packages/typescript-config`
 
 ### 📱 Frontend (`apps/mobile`)
 - **Framework:** [React Native 0.88](https://reactnative.dev/) & [Expo SDK 58](https://expo.dev/)
@@ -45,7 +50,7 @@ A modern, high-precision medication reminder and inventory management mobile app
 - **Audio & Haptics:** [`expo-audio ~58.0.10`](https://docs.expo.dev/versions/latest/sdk/audio/) & `react-native Vibration`
 - **Notifications:** [`expo-notifications ~58.1.6`](https://docs.expo.dev/versions/latest/sdk/notifications/)
 - **Camera & Gallery:** [`expo-image-picker ~58.0.10`](https://docs.expo.dev/versions/latest/sdk/image-picker/)
-- **AI Chatbot:** Built-in interactive MediRem AI assistant
+- **AI Chatbot:** Built-in interactive MediRem AI assistant (`apps/mobile/src/app/(tabs)/chat.tsx`)
 
 ### 🚀 Backend (`apps/backend`)
 - **Framework:** [NestJS 10](https://nestjs.com/) (TypeScript)
@@ -72,48 +77,56 @@ cd MediRem_app_react-native
 # 2. Install monorepo dependencies
 npm install
 
-# 3. Initialize Prisma database
+# 3. Build shared packages & apps via Turborepo
+npm run build
+
+# 4. Initialize Prisma database
 npm run prisma:migrate
 npm run prisma:generate
 
-# 4. Start NestJS Backend
-npm run backend:dev
+# 5. Run both mobile and backend in parallel with Turborepo
+npm run dev
 
-# 5. Start Expo Mobile App
-npm run mobile
+# Or run separately:
+npm run mobile          # Expo dev server
+npm run backend:dev     # NestJS dev server
 ```
 
 Scan the QR code with **Expo Go** (Android) or the Camera app (iOS) to launch the app instantly.
 
 ---
 
-## 📁 Monorepo Structure
+## 📁 Turborepo Monorepo Structure
 
 ```
 MediRem/
-├── package.json              # Monorepo root workspace configuration
+├── turbo.json                  # Turborepo task pipeline configuration
+├── package.json                # Root package.json with workspaces & turbo scripts
+├── packages/
+│   ├── types/                  # Shared TypeScript types & DTOs (@medirem/types)
+│   └── typescript-config/      # Shared tsconfig bases (@medirem/typescript-config)
 ├── apps/
-│   ├── mobile/               # Expo React Native mobile application
+│   ├── mobile/                 # Expo React Native mobile application (@medirem/mobile)
 │   │   ├── src/
-│   │   │   ├── app/          # Expo Router screens (tabs, ai-chat, meds, history)
-│   │   │   ├── components/   # UI widgets & DateTime pickers
-│   │   │   ├── services/     # Audio, notifications & API services
-│   │   │   └── global.css    # Tailwind CSS
-│   │   ├── assets/           # App icons, splash screens, sounds
-│   │   ├── app.json          # Expo configuration
-│   │   └── package.json      # @medirem/mobile
+│   │   │   ├── app/            # Expo Router screens (today, meds, chat, history, profile)
+│   │   │   ├── components/     # UI widgets & DateTime pickers
+│   │   │   ├── services/       # Audio, notifications & API services
+│   │   │   └── global.css      # Tailwind CSS
+│   │   ├── assets/             # App icons, splash screens, sounds
+│   │   ├── app.json            # Expo configuration
+│   │   └── package.json
 │   │
-│   └── backend/              # NestJS + Prisma ORM REST API
+│   └── backend/                # NestJS + Prisma ORM REST API (@medirem/backend)
 │       ├── src/
-│       │   ├── medications/  # Medications CRUD & dose recording
-│       │   ├── doses/        # Dose history & compliance logs
-│       │   ├── health/       # Health check API (/api/health)
-│       │   ├── prisma/       # Prisma service & connection
-│       │   ├── app.module.ts # Root NestJS module
-│       │   └── main.ts       # NestJS entry point (port 3000)
+│       │   ├── medications/    # Medications CRUD & dose recording
+│       │   ├── doses/          # Dose history & compliance logs
+│       │   ├── health/         # Health check API (/api/health)
+│       │   ├── prisma/         # Prisma service & connection
+│       │   ├── app.module.ts   # Root NestJS module
+│       │   └── main.ts         # NestJS entry point (port 3000)
 │       ├── prisma/
-│       │   └── schema.prisma # Prisma database schema
-│       └── package.json      # @medirem/backend
+│       │   └── schema.prisma   # Prisma database schema
+│       └── package.json
 ```
 
 ---

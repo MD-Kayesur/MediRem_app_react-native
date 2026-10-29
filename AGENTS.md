@@ -1,14 +1,21 @@
-This is a Monorepo containing an Expo/React Native mobile application (`apps/mobile`) and a NestJS + Prisma ORM backend (`apps/backend`). Prioritize mobile-first patterns, performance, and cross-platform compatibility.
+This is a **Turborepo Monorepo** containing an Expo/React Native mobile application (`apps/mobile`), a NestJS + Prisma ORM backend (`apps/backend`), and shared packages (`packages/types`, `packages/typescript-config`). Prioritize mobile-first patterns, performance, and cross-platform compatibility.
 
-## Monorepo Workspaces
+## Monorepo Workspaces & Architecture
 
 - `apps/mobile`: Expo SDK 58 React Native application (Expo Router, NativeWind).
 - `apps/backend`: NestJS 10 REST API with Prisma ORM 5 (Medications, Doses, Health).
+- `packages/types`: Shared TypeScript interfaces and DTOs consumed across apps.
+- `packages/typescript-config`: Shared `tsconfig` configurations.
 
-## Monorepo Commands
+## Turborepo Commands
 
 From root:
 ```bash
+npm run dev             # start both mobile and backend in parallel with Turborepo
+npm run build           # build all packages and apps via Turborepo
+npm run lint            # lint all packages with Turborepo
+npm run typecheck       # typecheck all packages with Turborepo
+
 npm run mobile          # start mobile Expo dev server
 npm run backend:dev     # start NestJS backend in watch mode
 npm run prisma:generate # generate Prisma client

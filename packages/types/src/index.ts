@@ -1,0 +1,68 @@
+/**
+ * Shared MediRem Monorepo Types
+ */
+
+export interface Medication {
+  id: string;
+  name: string;
+  dosage: string;
+  instructions?: string;
+  frequency: string;
+  selectedDays?: string[];
+  startDate?: string;
+  endDate?: string;
+  time: string;
+  timeSlot: 'Morning' | 'Afternoon' | 'Evening' | 'Night';
+  pillsLeft: number;
+  totalPills: number;
+  imageUri?: string;
+  status: 'active' | 'paused';
+  alarmEnabled: boolean;
+  notificationId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreateMedicationInput {
+  name: string;
+  dosage: string;
+  instructions?: string;
+  frequency?: string;
+  selectedDays?: string[];
+  startDate?: string;
+  endDate?: string;
+  time?: string;
+  timeSlot?: 'Morning' | 'Afternoon' | 'Evening' | 'Night';
+  pillsLeft?: number;
+  totalPills?: number;
+  imageUri?: string;
+  status?: 'active' | 'paused';
+  alarmEnabled?: boolean;
+  notificationId?: string;
+}
+
+export interface UpdateMedicationInput extends Partial<CreateMedicationInput> {}
+
+export interface DoseLog {
+  id: string;
+  medicationId: string;
+  scheduledTime: string;
+  takenAt: string;
+  status: 'taken' | 'skipped' | 'overdue';
+  note?: string;
+}
+
+export interface ApiResponse<T = any> {
+  success: boolean;
+  data?: T;
+  message?: string;
+  error?: string;
+}
+
+export interface HealthCheckResponse {
+  status: string;
+  service: string;
+  timestamp: string;
+  uptime: number;
+}
+
