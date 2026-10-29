@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -38,10 +38,34 @@ export default function SignUpScreen() {
   const [verifyCode, setVerifyCode] = useState('');
   const [receivedCode, setReceivedCode] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
+  const [resendCountdown, setResendCountdown] = useState(0);
 
   // UI state
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const codeInputRef = useRef<any>(null);
+
+  // Focus code input on entering verify step
+  useEffect(() => {
+    if (step === 'verify') {
+      const timer = setTimeout(() => {
+        codeInputRef.current?.focus();
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [step]);
+
+  // Countdown timer for resend code
+  useEffect(() => {
+    let interval: any = null;
+    if (resendCountdown > 0) {
+      interval = setInterval(() => {
+        setResendCountdown((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [resendCountdown]);
 
   // Password strength calculation
   const getPasswordStrength = () => {
@@ -92,10 +116,9 @@ export default function SignUpScreen() {
 
     if (result.success) {
       if (result.requiresVerification) {
-        if (result.code) {
-          setReceivedCode(result.code);
-          setVerifyCode(result.code); // Pre-fill in dev mode
-        }
+        setReceivedCode(result.code || null);
+        setVerifyCode(''); // Clean field ready for user entry
+        setResendCountdown(60); // 60s cooldown
         setStep('verify');
       } else {
         Alert.alert(
@@ -104,7 +127,7 @@ export default function SignUpScreen() {
           [
             {
               text: 'Go to Sign In',
-              onPress: () => router.replace('/sign-in'),
+              onPress: () => router.replace({ pathname: '/sign-in', params: { email } }),
             },
           ]
         );
@@ -115,10 +138,10 @@ export default function SignUpScreen() {
   };
 
   // Handle 6-Digit Email Code Verification -> Redirect to Login Page!
-  const handleVerifySignup = async () => {
+  const handleVerifySignup = async (overrideCode?: string) => {
     setErrorMessage(null);
 
-    const cleanCode = verifyCode.trim();
+    const cleanCode = (overrideCode || verifyCode).trim();
     if (!cleanCode || cleanCode.length < 6) {
       setErrorMessage('Please enter the full 6-digit verification code.');
       return;
@@ -146,17 +169,16 @@ export default function SignUpScreen() {
 
   // Resend 6-Digit Verification Code
   const handleResendCode = async () => {
+    if (resendCountdown > 0) return;
     setErrorMessage(null);
     setResending(true);
     const result = await resendSignupCode(email);
     setResending(false);
 
     if (result.success) {
-      if (result.code) {
-        setReceivedCode(result.code);
-        setVerifyCode(result.code);
-      }
-      Alert.alert('Code Sent! ✉️', `A fresh 6-digit verification code was sent to ${email}.`);
+      setReceivedCode(result.code || null);
+      setResendCountdown(60);
+      Alert.alert('Code Sent! ✉️', `A fresh 6-digit verification code was sent to ${email}. Check your Gmail inbox.`);
     } else {
       setErrorMessage(result.error || 'Failed to resend code.');
     }
@@ -166,6 +188,8 @@ export default function SignUpScreen() {
     continueAsGuest();
     router.replace('/(tabs)/today');
   };
+
+  const digits = verifyCode.split('');
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -431,20 +455,21 @@ export default function SignUpScreen() {
             <View>
               <View style={styles.headerSection}>
                 <View style={styles.badgeCircle}>
-                  <Ionicons name="mail-unread-outline" size={34} color="#208AEF" />
+                  <Ionicons name="mail-unread-outline" size={36} color="#208AEF" />
                 </View>
                 <Text style={styles.title}>Verify Your Email ✉️</Text>
                 <Text style={styles.subtitle}>
                   We sent a 6-digit verification code to{' '}
-                  <Text style={{ fontWeight: '700', color: '#0F172A' }}>{email}</Text> via Nodemailer.
+                  <Text style={{ fontWeight: '700', color: '#0F172A' }}>{email}</Text> via Gmail.
                 </Text>
               </View>
 
+              {/* Optional Developer Help Chip (shown in development only) */}
               {receivedCode && (
                 <View style={styles.infoBanner}>
                   <Ionicons name="key-outline" size={16} color="#0284C7" />
                   <Text style={styles.infoBannerText}>
-                    Verification Code: <Text style={{ fontWeight: '800' }}>{receivedCode}</Text>
+                    Email Sent! Code: <Text style={{ fontWeight: '800' }}>{receivedCode}</Text>
                   </Text>
                 </View>
               )}
@@ -457,31 +482,52 @@ export default function SignUpScreen() {
               )}
 
               <View style={styles.formContainer}>
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>6-Digit Code</Text>
-                  <View style={styles.inputWrapper}>
-                    <Ionicons name="shield-checkmark-outline" size={20} color="#94A3B8" style={styles.inputIcon} />
-                    <TextInput
-                      style={[styles.textInput, styles.codeInput]}
-                      placeholder="• • • • • •"
-                      placeholderTextColor="#94A3B8"
-                      value={verifyCode}
-                      onChangeText={(val) => {
-                        setVerifyCode(val);
-                        if (errorMessage) setErrorMessage(null);
-                      }}
-                      keyboardType="number-pad"
-                      maxLength={6}
-                      editable={!loading}
-                    />
-                  </View>
-                </View>
+                {/* 6 Individual Interactive OTP Digit Boxes */}
+                <Text style={styles.inputLabel}>Enter 6-Digit Code</Text>
+                <TouchableOpacity
+                  activeOpacity={1}
+                  onPress={() => codeInputRef.current?.focus()}
+                  style={styles.otpBoxesRow}>
+                  {[0, 1, 2, 3, 4, 5].map((idx) => {
+                    const digit = digits[idx] || '';
+                    const isCurrent = verifyCode.length === idx;
+                    return (
+                      <View
+                        key={idx}
+                        style={[
+                          styles.otpBox,
+                          isCurrent && styles.otpBoxActive,
+                          digit ? styles.otpBoxFilled : null,
+                        ]}>
+                        <Text style={styles.otpDigit}>{digit || (isCurrent ? '|' : '•')}</Text>
+                      </View>
+                    );
+                  })}
+                </TouchableOpacity>
+
+                {/* Hidden Native Input */}
+                <TextInput
+                  ref={codeInputRef}
+                  style={styles.hiddenInput}
+                  value={verifyCode}
+                  onChangeText={(val) => {
+                    const cleaned = val.replace(/[^0-9]/g, '').slice(0, 6);
+                    setVerifyCode(cleaned);
+                    if (errorMessage) setErrorMessage(null);
+                    if (cleaned.length === 6) {
+                      handleVerifySignup(cleaned);
+                    }
+                  }}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  caretHidden
+                />
 
                 {/* Verify Code Button */}
                 <TouchableOpacity
-                  onPress={handleVerifySignup}
-                  style={[styles.primaryButton, loading && styles.buttonDisabled]}
-                  disabled={loading}
+                  onPress={() => handleVerifySignup()}
+                  style={[styles.primaryButton, (loading || verifyCode.length < 6) && styles.buttonDisabled]}
+                  disabled={loading || verifyCode.length < 6}
                   activeOpacity={0.85}>
                   {loading ? (
                     <ActivityIndicator color="#FFFFFF" size="small" />
@@ -493,17 +539,20 @@ export default function SignUpScreen() {
                   )}
                 </TouchableOpacity>
 
-                {/* Resend Code Button */}
+                {/* Resend Code Button with countdown */}
                 <TouchableOpacity
                   onPress={handleResendCode}
                   style={styles.resendButton}
-                  disabled={resending}
+                  disabled={resending || resendCountdown > 0}
                   activeOpacity={0.7}>
                   {resending ? (
                     <ActivityIndicator size="small" color="#208AEF" />
                   ) : (
                     <Text style={styles.resendText}>
-                      {"Didn't receive email?"} <Text style={styles.resendLink}>Resend Code</Text>
+                      {"Didn't receive email? "}
+                      <Text style={[styles.resendLink, resendCountdown > 0 && { color: '#94A3B8' }]}>
+                        {resendCountdown > 0 ? `Resend code in ${resendCountdown}s` : 'Resend Code'}
+                      </Text>
                     </Text>
                   )}
                 </TouchableOpacity>
@@ -511,10 +560,10 @@ export default function SignUpScreen() {
                 {/* Change Email */}
                 <TouchableOpacity
                   onPress={() => setStep('form')}
-                  style={{ alignItems: 'center', paddingVertical: 8 }}
+                  style={{ alignItems: 'center', paddingVertical: 10 }}
                   activeOpacity={0.7}>
                   <Text style={{ fontSize: 13, color: '#64748B' }}>
-                    Wrong email? <Text style={{ color: '#208AEF', fontWeight: '600' }}>Edit details</Text>
+                    Wrong email? <Text style={{ color: '#208AEF', fontWeight: '700' }}>Change email address</Text>
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -566,10 +615,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   verifyStepBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
     borderRadius: 12,
     backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
   },
   verifyStepBadgeText: {
     fontSize: 12,
@@ -587,13 +638,15 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   badgeCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     backgroundColor: '#EFF6FF',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: '#BFDBFE',
   },
   title: {
     fontSize: 26,
@@ -607,7 +660,7 @@ const styles = StyleSheet.create({
     color: '#64748B',
     textAlign: 'center',
     lineHeight: 20,
-    maxWidth: 300,
+    maxWidth: 320,
   },
   errorBanner: {
     flexDirection: 'row',
@@ -686,11 +739,47 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     fontWeight: '500',
   },
-  codeInput: {
-    fontSize: 22,
+  otpBoxesRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 6,
+    marginVertical: 10,
+  },
+  otpBox: {
+    flex: 1,
+    height: 58,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  otpBoxActive: {
+    borderColor: '#208AEF',
+    backgroundColor: '#EFF6FF',
+    borderWidth: 2,
+    elevation: 2,
+    shadowColor: '#208AEF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+  },
+  otpBoxFilled: {
+    borderColor: '#208AEF',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+  },
+  otpDigit: {
+    fontSize: 24,
     fontWeight: '800',
-    letterSpacing: 8,
-    textAlign: 'center',
+    color: '#0F172A',
+  },
+  hiddenInput: {
+    position: 'absolute',
+    opacity: 0.01,
+    width: 1,
+    height: 1,
   },
   eyeIcon: {
     padding: 6,

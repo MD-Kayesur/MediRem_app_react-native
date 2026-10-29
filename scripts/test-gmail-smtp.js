@@ -1,11 +1,13 @@
 const nodemailer = require('nodemailer');
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../apps/backend/.env') });
+
+const user = process.env.SMTP_USER || 'rmdkayesur@gmail.com';
+const pass = (process.env.SMTP_PASS || '').replace(/\s+/g, '');
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
-  auth: {
-    user: 'rmdkayesur@gmail.com',
-    pass: 'iwkzgeahuuqtrhef',
-  },
+  auth: { user, pass },
 });
 
 async function testGmail() {
@@ -14,10 +16,10 @@ async function testGmail() {
     await transporter.verify();
     console.log('✅ GMAIL_SMTP_SUCCESS: Successfully authenticated with Google SMTP servers!');
 
-    console.log('Sending test verification email to rmdkayesur@gmail.com...');
+    console.log(`Sending test verification email to ${user}...`);
     const info = await transporter.sendMail({
-      from: '"MediRem Health" <rmdkayesur@gmail.com>',
-      to: 'rmdkayesur@gmail.com',
+      from: `"MediRem Health" <${user}>`,
+      to: user,
       subject: '💊 MediRem Email Verification Setup Test',
       html: `
         <div style="font-family: Arial, sans-serif; padding: 20px;">

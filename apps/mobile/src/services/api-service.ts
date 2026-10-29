@@ -1,12 +1,22 @@
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import { Medication } from '@medirem/types';
 
-/**
- * Default backend API base URL
- * Android Emulator uses 10.0.2.2, iOS Simulator uses localhost, physical devices use machine IP
- */
-export const API_BASE_URL =
-  Platform.OS === 'android' ? 'http://10.0.2.2:3000/api' : 'http://localhost:3000/api';
+function getApiBaseUrl(): string {
+  // Check if running on a real device through Expo Go
+  const hostUri = Constants.expoConfig?.hostUri;
+  if (hostUri) {
+    const host = hostUri.split(':')[0];
+    if (host && host !== 'localhost' && host !== '127.0.0.1') {
+      return `http://${host}:3000/api`;
+    }
+  }
+
+  // Android Emulator uses 10.0.2.2, iOS Simulator & Web use localhost
+  return Platform.OS === 'android' ? 'http://10.0.2.2:3000/api' : 'http://localhost:3000/api';
+}
+
+export const API_BASE_URL = getApiBaseUrl();
 
 export type ServerMedication = Medication;
 
