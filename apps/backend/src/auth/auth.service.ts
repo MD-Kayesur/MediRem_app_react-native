@@ -154,7 +154,7 @@ export class AuthService {
     }
 
     // Mark user as verified and clear verifyCode
-    await this.prisma.user.update({
+    const updated = await this.prisma.user.update({
       where: { id: user.id },
       data: {
         isVerified: true,
@@ -168,6 +168,13 @@ export class AuthService {
     return {
       success: true,
       email: user.email,
+      user: {
+        id: updated.id,
+        name: updated.name,
+        email: updated.email,
+        phone: updated.phone || undefined,
+        createdAt: updated.createdAt.toISOString(),
+      },
       message: 'Account verified successfully! Please sign in with your credentials.',
     };
   }

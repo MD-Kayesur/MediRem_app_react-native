@@ -92,4 +92,29 @@ export interface AuthResponse {
   token?: string;
 }
 
+export interface VerifySignupInput {
+  email: string;
+  code: string;
+}
+
+export interface ResendVerifyCodeInput {
+  email: string;
+}
+
+export interface ForgotPasswordInput {
+  email: string;
+}
+
+export interface VerifyResetCodeInput {
+  email: string;
+  code: string;
+}
+
+export interface ResetPasswordInput {
+  email: string;
+  code: string;
+  newPassword?: string;
+  password?: string;
+}
+
 

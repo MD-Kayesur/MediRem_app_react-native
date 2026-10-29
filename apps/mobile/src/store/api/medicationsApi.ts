@@ -1,0 +1,72 @@
+import { apiSlice } from './apiSlice';
+import { Medication, CreateMedicationInput, UpdateMedicationInput } from '@medirem/types';
+
+export const medicationsApi = apiSlice.injectEndpoints({
+  endpoints: (builder) => ({
+    getMedications: builder.query<Medication[], void>({
+      query: () => '/medications',
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.map(({ id }) => ({ type: 'Medications' as const, id })),
+              { type: 'Medications', id: 'LIST' },
+            ]
+          : [{ type: 'Medications', id: 'LIST' }],
+    }),
+
+    getMedicationById: builder.query<Medication, string>({
+      query: (id) => `/medications/${id}`,
+      providesTags: (result, error, id) => [{ type: 'Medications', id }],
+    }),
+
+    createMedication: builder.mutation<Medication, CreateMedicationInput>({
+      query: (body) => ({
+        url: '/medications',
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: [{ type: 'Medications', id: 'LIST' }],
+    }),
+
+    updateMedication: builder.mutation<Medication, { id: string; data: UpdateMedicationInput }>({
+      query: ({ id, data }) => ({
+        url: `/medications/${id}`,
+        method: 'PATCH',
+        body: data,
+      }),
+      invalidatesTags: (result, error, { id }) => [
+        { type: 'Medications', id },
+        { type: 'Medications', id: 'LIST' },
+      ],
+    }),
+
+    deleteMedication: builder.mutation<{ success: boolean }, string>({
+      query: (id) => ({
+        url: `/medications/${id}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: [{ type: 'Medications', id: 'LIST' }],
+    }),
+
+    takeDose: builder.mutation<Medication, string>({
+      query: (id) => ({
+        url: `/medications/${id}/take-dose`,
+        method: 'POST',
+      }),
+      invalidatesTags: (result, error, id) => [
+        { type: 'Medications', id },
+        { type: 'Medications', id: 'LIST' },
+        'Doses',
+      ],
+    }),
+  }),
+});
+
+export const {
+  useGetMedicationsQuery,
+  useGetMedicationByIdQuery,
+  useCreateMedicationMutation,
+  useUpdateMedicationMutation,
+  useDeleteMedicationMutation,
+  useTakeDoseMutation,
+} = medicationsApi;

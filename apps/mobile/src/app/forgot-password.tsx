@@ -15,15 +15,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import {
-  sendPasswordResetCode,
-  verifyResetCode,
-  resetPassword,
-} from '@/services/auth-service';
+  useForgotPasswordMutation,
+  useVerifyResetCodeMutation,
+  useResetPasswordMutation,
+} from '@/store/api/authApi';
 
 type Step = 'request' | 'verify' | 'new_password' | 'success';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
+  const [forgotPasswordApi, { isLoading: isSendingCode }] = useForgotPasswordMutation();
+  const [verifyResetCodeApi, { isLoading: isVerifyingCode }] = useVerifyResetCodeMutation();
+  const [resetPasswordApi, { isLoading: isResettingPassword }] = useResetPasswordMutation();
+
   const [step, setStep] = useState<Step>('request');
 
   const [email, setEmail] = useState('');
@@ -33,39 +37,36 @@ export default function ForgotPasswordScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const [isLoading, setIsLoading] = useState(false);
+  const isLoading = isSendingCode || isVerifyingCode || isResettingPassword;
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [receivedCode, setReceivedCode] = useState<string | null>(null);
 
-  // Step 1: Send 6-digit Code via Nodemailer
+  // Step 1: Send 6-digit Code via Nodemailer & Redux
   const handleSendCode = async () => {
     setErrorMessage(null);
     setInfoMessage(null);
 
-    const cleanEmail = email.trim();
+    const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail || !cleanEmail.includes('@')) {
       setErrorMessage('Please enter a valid email address.');
       return;
     }
 
-    setIsLoading(true);
-    const result = await sendPasswordResetCode(cleanEmail);
-    setIsLoading(false);
-
-    if (result.success) {
-      if (result.code) {
-        setReceivedCode(result.code);
-        setCode(result.code);
+    try {
+      const result = await forgotPasswordApi({ email: cleanEmail }).unwrap();
+      if ((result as any)?.code) {
+        setReceivedCode((result as any).code);
       }
-      setInfoMessage(result.message);
+      setInfoMessage(result.message || `Verification code sent to ${cleanEmail}.`);
       setStep('verify');
-    } else {
-      setErrorMessage(result.error || 'Failed to send verification code.');
+    } catch (err: any) {
+      const msg = err?.data?.message || err?.error || 'Failed to send verification code. Please check email address.';
+      setErrorMessage(msg);
     }
   };
 
-  // Step 2: Verify Code
+  // Step 2: Verify Code via Redux
   const handleVerifyCode = async () => {
     setErrorMessage(null);
     setInfoMessage(null);
@@ -76,19 +77,18 @@ export default function ForgotPasswordScreen() {
       return;
     }
 
-    setIsLoading(true);
-    const result = await verifyResetCode(email, cleanCode);
-    setIsLoading(false);
-
-    if (result.success) {
-      setInfoMessage(result.message);
+    try {
+      const cleanEmail = email.trim().toLowerCase();
+      const result = await verifyResetCodeApi({ email: cleanEmail, code: cleanCode }).unwrap();
+      setInfoMessage(result.message || 'Code verified successfully.');
       setStep('new_password');
-    } else {
-      setErrorMessage(result.error || 'Invalid or expired verification code.');
+    } catch (err: any) {
+      const msg = err?.data?.message || err?.error || 'Invalid or expired verification code.';
+      setErrorMessage(msg);
     }
   };
 
-  // Step 3: Set New Password
+  // Step 3: Set New Password via Redux
   const handleResetPassword = async () => {
     setErrorMessage(null);
 
@@ -102,14 +102,17 @@ export default function ForgotPasswordScreen() {
       return;
     }
 
-    setIsLoading(true);
-    const result = await resetPassword(email, code, newPassword);
-    setIsLoading(false);
-
-    if (result.success) {
+    try {
+      const cleanEmail = email.trim().toLowerCase();
+      await resetPasswordApi({
+        email: cleanEmail,
+        code: code.trim(),
+        newPassword,
+      }).unwrap();
       setStep('success');
-    } else {
-      setErrorMessage(result.error || 'Failed to reset password. Please try again.');
+    } catch (err: any) {
+      const msg = err?.data?.message || err?.error || 'Failed to reset password. Please try again.';
+      setErrorMessage(msg);
     }
   };
 

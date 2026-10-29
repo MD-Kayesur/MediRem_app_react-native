@@ -1,5 +1,7 @@
 import { AuthUser } from '@medirem/types';
 import { API_BASE_URL } from './api-service';
+import { store } from '@/store';
+import { setCredentials, logout as reduxLogout } from '@/store/slices/authSlice';
 
 export const DEFAULT_USER: AuthUser = {
   id: 'usr_rahman_default',
@@ -21,6 +23,11 @@ export function subscribeToAuth(callback: (user: AuthUser | null) => void): () =
 }
 
 function notifyListeners() {
+  if (currentUser) {
+    store.dispatch(setCredentials({ user: currentUser }));
+  } else {
+    store.dispatch(reduxLogout());
+  }
   listeners.forEach((cb) => {
     try {
       cb(currentUser);
@@ -163,22 +170,22 @@ export async function signUp(
         notifyListeners();
         return { success: true, user: currentUser ?? undefined };
       }
-    } else if (!res.ok) {
+    } else {
       return {
         success: false,
         error: data?.message || 'Registration failed. Please check your information.',
       };
     }
   } catch {
-    // Backend offline, fallback to simulated verification
+    return {
+      success: false,
+      error: 'Cannot reach backend server. Please ensure the backend is running.',
+    };
   }
 
   return {
-    success: true,
-    requiresVerification: true,
-    email: cleanEmail,
-    code: '123456',
-    message: `Verification code sent to ${cleanEmail}.`,
+    success: false,
+    error: 'Unexpected registration response.',
   };
 }
 
@@ -218,10 +225,11 @@ export async function verifySignup(
       };
     }
   } catch {
-    if (cleanCode.length === 6) {
-      return { success: true, message: 'Account verified successfully! Please log in.' };
-    }
-    return { success: false, message: '', error: 'Failed to verify account code.' };
+    return {
+      success: false,
+      message: '',
+      error: 'Cannot reach backend server to verify code.',
+    };
   }
 }
 

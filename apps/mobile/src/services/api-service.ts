@@ -2,8 +2,13 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { Medication } from '@medirem/types';
 
-function getApiBaseUrl(): string {
-  // Check if running on a real device through Expo Go
+export function getApiBaseUrl(): string {
+  // 1. Explicit env override
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL.replace(/\/+$/, '');
+  }
+
+  // 2. Check if running on a real device through Expo Go / Metro bundler
   const hostUri = Constants.expoConfig?.hostUri;
   if (hostUri) {
     const host = hostUri.split(':')[0];
@@ -12,7 +17,7 @@ function getApiBaseUrl(): string {
     }
   }
 
-  // Android Emulator uses 10.0.2.2, iOS Simulator & Web use localhost
+  // 3. Android Emulator uses 10.0.2.2, iOS Simulator & Web use localhost
   return Platform.OS === 'android' ? 'http://10.0.2.2:3000/api' : 'http://localhost:3000/api';
 }
 

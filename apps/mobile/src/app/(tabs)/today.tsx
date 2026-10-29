@@ -13,6 +13,8 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { triggerAudibleAlarm, stopAudibleAlarm } from '@/services/sound-service';
 import { subscribeToAuth, getCurrentUser } from '@/services/auth-service';
+import { useAppSelector } from '@/store/hooks';
+import { selectCurrentUser } from '@/store/slices/authSlice';
 
 interface DoseItem {
   id: string;
@@ -140,12 +142,14 @@ const INITIAL_DOSES: DoseItem[] = [
 ];
 
 export default function HomeScreen() {
-  const [user, setUser] = useState(() => getCurrentUser());
+  const reduxUser = useAppSelector(selectCurrentUser);
+  const [localUser, setLocalUser] = useState(() => getCurrentUser());
+  const user = reduxUser || localUser;
   const [doses, setDoses] = useState<DoseItem[]>(INITIAL_DOSES);
   const [currentTime, setCurrentTime] = useState(() => new Date());
 
   useEffect(() => {
-    return subscribeToAuth((u) => setUser(u));
+    return subscribeToAuth((u) => setLocalUser(u));
   }, []);
 
   useEffect(() => {

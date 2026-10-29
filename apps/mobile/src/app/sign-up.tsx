@@ -16,13 +16,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import {
-  signUp,
-  verifySignup,
-  resendSignupCode,
-  continueAsGuest,
-} from '@/services/auth-service';
+  useSignUpMutation,
+  useVerifySignupMutation,
+  useResendSignupCodeMutation,
+} from '@/store/api/authApi';
+import { useAppDispatch } from '@/store/hooks';
+import { setGuestUser, setPendingEmail } from '@/store/slices/authSlice';
 
 export default function SignUpScreen() {
+  const dispatch = useAppDispatch();
+  const [signUpApi, { isLoading: isSigningUp }] = useSignUpMutation();
+  const [verifySignupApi, { isLoading: isVerifying }] = useVerifySignupMutation();
+  const [resendCodeApi, { isLoading: isResending }] = useResendSignupCodeMutation();
+
   const [step, setStep] = useState<'form' | 'verify'>('form');
 
   // Form Fields
@@ -37,11 +43,10 @@ export default function SignUpScreen() {
   // Verification Code State
   const [verifyCode, setVerifyCode] = useState('');
   const [receivedCode, setReceivedCode] = useState<string | null>(null);
-  const [resending, setResending] = useState(false);
   const [resendCountdown, setResendCountdown] = useState(0);
 
   // UI state
-  const [loading, setLoading] = useState(false);
+  const loading = isSigningUp || isVerifying;
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const codeInputRef = useRef<any>(null);
@@ -81,7 +86,7 @@ export default function SignUpScreen() {
 
   const strength = getPasswordStrength();
 
-  // Handle Initial Registration
+  // Handle Initial Registration via Redux RTK Query
   const handleSignUp = async () => {
     setErrorMessage(null);
 
@@ -110,12 +115,17 @@ export default function SignUpScreen() {
       return;
     }
 
-    setLoading(true);
-    const result = await signUp(name, email, password, phone);
-    setLoading(false);
+    try {
+      const cleanEmail = email.trim().toLowerCase();
+      const result = await signUpApi({
+        name: name.trim(),
+        email: cleanEmail,
+        password,
+        phone: phone.trim() || undefined,
+      }).unwrap();
 
-    if (result.success) {
       if (result.requiresVerification) {
+        dispatch(setPendingEmail(cleanEmail));
         setReceivedCode(result.code || null);
         setVerifyCode(''); // Clean field ready for user entry
         setResendCountdown(60); // 60s cooldown
@@ -123,21 +133,25 @@ export default function SignUpScreen() {
       } else {
         Alert.alert(
           'Account Created! 🎉',
-          `Welcome to MediRem, ${result.user?.name || name}!\n\nPlease sign in with your credentials.`,
+          `Welcome to MediRem, ${name.trim()}!\n\nPlease sign in with your credentials.`,
           [
             {
               text: 'Go to Sign In',
-              onPress: () => router.replace({ pathname: '/sign-in', params: { email } }),
+              onPress: () => router.replace({ pathname: '/sign-in', params: { email: cleanEmail } }),
             },
           ]
         );
       }
-    } else {
-      setErrorMessage(result.error || 'Failed to create account. Please try again.');
+    } catch (err: any) {
+      const msg =
+        err?.data?.message ||
+        err?.error ||
+        'Failed to create account. Please ensure the backend is running and try again.';
+      setErrorMessage(msg);
     }
   };
 
-  // Handle 6-Digit Email Code Verification -> Redirect to Login Page!
+  // Handle 6-Digit Email Code Verification via Redux RTK Query -> Redirect to Login Page!
   const handleVerifySignup = async (overrideCode?: string) => {
     setErrorMessage(null);
 
@@ -147,45 +161,50 @@ export default function SignUpScreen() {
       return;
     }
 
-    setLoading(true);
-    const result = await verifySignup(email, cleanCode);
-    setLoading(false);
+    try {
+      const cleanEmail = email.trim().toLowerCase();
+      const result = await verifySignupApi({
+        email: cleanEmail,
+        code: cleanCode,
+      }).unwrap();
 
-    if (result.success) {
       Alert.alert(
         'Account Verified! 🎉',
-        'Your MediRem account has been verified successfully!\n\nYou will now be redirected to the Sign In page.',
+        result.message || 'Your MediRem account has been verified successfully!\n\nYou will now be redirected to the Sign In page.',
         [
           {
             text: 'Sign In Now',
-            onPress: () => router.replace({ pathname: '/sign-in', params: { email } }),
+            onPress: () => router.replace({ pathname: '/sign-in', params: { email: cleanEmail } }),
           },
         ]
       );
-    } else {
-      setErrorMessage(result.error || 'Invalid or expired verification code.');
+    } catch (err: any) {
+      const msg =
+        err?.data?.message ||
+        err?.error ||
+        'Invalid or expired verification code. Please check your Gmail.';
+      setErrorMessage(msg);
     }
   };
 
-  // Resend 6-Digit Verification Code
+  // Resend 6-Digit Verification Code via Redux RTK Query
   const handleResendCode = async () => {
     if (resendCountdown > 0) return;
     setErrorMessage(null);
-    setResending(true);
-    const result = await resendSignupCode(email);
-    setResending(false);
 
-    if (result.success) {
-      setReceivedCode(result.code || null);
+    try {
+      const cleanEmail = email.trim().toLowerCase();
+      const result = await resendCodeApi({ email: cleanEmail }).unwrap();
       setResendCountdown(60);
-      Alert.alert('Code Sent! ✉️', `A fresh 6-digit verification code was sent to ${email}. Check your Gmail inbox.`);
-    } else {
-      setErrorMessage(result.error || 'Failed to resend code.');
+      Alert.alert('Code Sent! ✉️', result.message || `A fresh 6-digit verification code was sent to ${cleanEmail}. Check your Gmail inbox.`);
+    } catch (err: any) {
+      const msg = err?.data?.message || err?.error || 'Failed to resend code.';
+      setErrorMessage(msg);
     }
   };
 
   const handleGuestLogin = () => {
-    continueAsGuest();
+    dispatch(setGuestUser());
     router.replace('/(tabs)/today');
   };
 
@@ -543,9 +562,9 @@ export default function SignUpScreen() {
                 <TouchableOpacity
                   onPress={handleResendCode}
                   style={styles.resendButton}
-                  disabled={resending || resendCountdown > 0}
+                  disabled={isResending || resendCountdown > 0}
                   activeOpacity={0.7}>
-                  {resending ? (
+                  {isResending ? (
                     <ActivityIndicator size="small" color="#208AEF" />
                   ) : (
                     <Text style={styles.resendText}>

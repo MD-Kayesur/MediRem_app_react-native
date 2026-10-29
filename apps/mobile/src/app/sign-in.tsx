@@ -14,16 +14,22 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { signIn, continueAsGuest } from '@/services/auth-service';
+import { useSignInMutation } from '@/store/api/authApi';
+import { useAppDispatch } from '@/store/hooks';
+import { setCredentials, setGuestUser } from '@/store/slices/authSlice';
 
 export default function SignInScreen() {
+  const dispatch = useAppDispatch();
+  const [signInApi, { isLoading: isSigningIn }] = useSignInMutation();
+
   const params = useLocalSearchParams<{ email?: string }>();
   const [email, setEmail] = useState(params.email || '');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
-  const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const loading = isSigningIn;
 
   const handleSignIn = async () => {
     setErrorMessage(null);
@@ -32,19 +38,30 @@ export default function SignInScreen() {
       return;
     }
 
-    setLoading(true);
-    const result = await signIn(email, password);
-    setLoading(false);
+    try {
+      const cleanEmail = email.trim().toLowerCase();
+      const result = await signInApi({
+        email: cleanEmail,
+        password: password || undefined,
+      }).unwrap();
 
-    if (result.success) {
-      router.replace('/(tabs)/today');
-    } else {
-      setErrorMessage(result.error || 'Failed to sign in. Please try again.');
+      if (result.success && result.user) {
+        dispatch(setCredentials({ user: result.user, token: result.token }));
+        router.replace('/(tabs)/today');
+      } else {
+        setErrorMessage(result.error || 'Failed to sign in. Please verify your credentials.');
+      }
+    } catch (err: any) {
+      const msg =
+        err?.data?.message ||
+        err?.error ||
+        'Failed to sign in. Please check your credentials or network.';
+      setErrorMessage(msg);
     }
   };
 
   const handleGuestLogin = () => {
-    continueAsGuest();
+    dispatch(setGuestUser());
     router.replace('/(tabs)/today');
   };
 
