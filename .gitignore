@@ -53,3 +53,4 @@ example
 # generated native folders
 /ios
 /android
+.neon
