@@ -413,7 +413,7 @@ export default function HomeScreen() {
         </View>
 
         {/* Back to Onboarding Link */}
-        <TouchableOpacity
+        {/* <TouchableOpacity
           className="flex-row items-center justify-center gap-2 py-3 mt-6 rounded-xl border border-slate-200 dark:border-slate-700"
           style={styles.returnBtn}
           onPress={() => router.replace('/')}
@@ -422,7 +422,7 @@ export default function HomeScreen() {
           <Text className="text-sm font-semibold text-primary" style={{ color: '#208AEF', fontWeight: '600' }}>
             Back to Welcome & Onboarding
           </Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </ScrollView>
     </SafeAreaView>
   );
