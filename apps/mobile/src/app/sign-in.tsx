@@ -10,7 +10,6 @@ import {
   ScrollView,
   Image,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -55,11 +54,7 @@ export default function SignInScreen() {
   };
 
   const handleForgotPassword = () => {
-    Alert.alert(
-      'Password Reset',
-      `A password reset link can be sent to ${email.trim() || 'your email address'}.\n\nPlease check your inbox.`,
-      [{ text: 'OK' }]
-    );
+    router.push('/forgot-password');
   };
 
   return (

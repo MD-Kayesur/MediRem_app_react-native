@@ -10,14 +10,16 @@ datasource db {
 }
 
 model User {
-  id          String        @id @default(uuid())
-  email       String?       @unique
-  name        String        @default("User")
-  password    String?
-  phone       String?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  medications Medication[]
+  id                 String        @id @default(uuid())
+  email              String?       @unique
+  name               String        @default("User")
+  password           String?
+  phone              String?
+  resetCode          String?       // 6-digit OTP code for password reset
+  resetCodeExpiresAt DateTime?     // Expiration timestamp for reset OTP
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  medications        Medication[]
 }
 
 model Medication {
