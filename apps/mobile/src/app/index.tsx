@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -57,7 +57,16 @@ const SLIDES: OnboardingSlide[] = [
 export default function LandingScreen() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showSplashPreview, setShowSplashPreview] = useState(false);
+  const [isSplashActive, setIsSplashActive] = useState(true);
   const flatListRef = useRef<FlatList<OnboardingSlide>>(null);
+
+  useEffect(() => {
+    // Show splash screen for 1.8 seconds on initial launch then reveal onboarding
+    const timer = setTimeout(() => {
+      setIsSplashActive(false);
+    }, 1800);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleNext = () => {
     if (currentIndex < SLIDES.length - 1) {
@@ -155,34 +164,56 @@ export default function LandingScreen() {
     }
   };
 
-  // Splash Screen Preview
-  if (showSplashPreview) {
+  // Full-Screen Splash with Centered Logo & MediRem Title
+  if (isSplashActive || showSplashPreview) {
     return (
       <SafeAreaView className="flex-1 bg-white dark:bg-slate-900" style={styles.container}>
-        <View className="flex-1 items-center justify-center px-8" style={styles.splashContent}>
-          <View className="mb-6 items-center" style={styles.splashLogoWrapper}>
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => {
+            setIsSplashActive(false);
+            setShowSplashPreview(false);
+          }}
+          className="flex-1 items-center justify-center px-8"
+          style={styles.splashContent}>
+          {/* Logo prominently centered */}
+          <View className="mb-4 items-center" style={styles.splashLogoWrapper}>
             <Image
               source={require('@/../assets/images/medirem-logo.png')}
-              style={{ width: 140, height: 140, borderRadius: 28 }}
+              style={styles.splashLogoImg}
               resizeMode="contain"
             />
           </View>
 
-          <Text className="text-base font-medium text-slate-500 dark:text-slate-400 mb-16" style={styles.splashSub}>
-            Your Health, Our Reminder
+          {/* App Title directly below Logo */}
+          <Text className="text-3xl font-extrabold text-slate-900 dark:text-white" style={styles.splashTitle}>
+            MediRem
           </Text>
 
+          {/* Subtitle / Tagline */}
+          <Text className="text-base font-medium text-slate-500 dark:text-slate-400 mb-16" style={styles.splashSub}>
+            Your Smart Medication Companion
+          </Text>
+
+          {/* Footer Loader & Dismiss */}
           <View className="absolute bottom-10 items-center w-full" style={styles.splashFooter}>
-            <Text className="text-xs text-slate-400 mb-4" style={styles.splashLoading}>Loading companion...</Text>
+            <Text className="text-xs text-slate-400 mb-4" style={styles.splashLoading}>
+              Loading companion...
+            </Text>
             <TouchableOpacity
-              className="py-2.5 px-5 rounded-full border border-slate-200 dark:border-slate-700"
+              className="py-2.5 px-6 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
               style={styles.splashBackBtn}
-              onPress={() => setShowSplashPreview(false)}
+              onPress={() => {
+                setIsSplashActive(false);
+                setShowSplashPreview(false);
+              }}
               activeOpacity={0.8}>
-              <Text className="text-sm font-semibold text-primary" style={{ color: '#208AEF', fontWeight: '600' }}>Back to Onboarding</Text>
+              <Text className="text-sm font-semibold text-primary" style={styles.splashBackBtnText}>
+                {showSplashPreview ? 'Back to Onboarding' : 'Tap to Continue'}
+              </Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </TouchableOpacity>
       </SafeAreaView>
     );
   }
@@ -602,6 +633,13 @@ const styles = StyleSheet.create({
   },
   splashLogoWrapper: {
     marginBottom: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  splashLogoImg: {
+    width: 120,
+    height: 120,
+    borderRadius: 28,
   },
   splashLogo: {
     width: 96,
@@ -646,5 +684,10 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+  },
+  splashBackBtnText: {
+    color: '#208AEF',
+    fontWeight: '600',
+    fontSize: 14,
   },
 });
