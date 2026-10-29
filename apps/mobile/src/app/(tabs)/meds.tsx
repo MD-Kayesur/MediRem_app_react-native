@@ -894,7 +894,7 @@ export default function MedsScreen() {
         <View className="flex-row justify-between items-center mb-3" style={styles.headerRow}>
           <View className="flex-row items-center gap-3">
             <Image
-              source={require('@/../assets/images/medirem-logo.png')}
+              source={require('@/../assets/images/icon-symbol.png')}
               style={{ width: 40, height: 40, borderRadius: 10 }}
               resizeMode="contain"
             />

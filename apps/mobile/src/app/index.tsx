@@ -176,19 +176,14 @@ export default function LandingScreen() {
           }}
           className="flex-1 items-center justify-center px-8"
           style={styles.splashContent}>
-          {/* Logo prominently centered */}
-          <View className="mb-4 items-center" style={styles.splashLogoWrapper}>
+          {/* Full MediRem Brand Logo (Icon + Wordmark) */}
+          <View className="mb-2 items-center" style={styles.splashLogoWrapper}>
             <Image
               source={require('@/../assets/images/medirem-logo.png')}
               style={styles.splashLogoImg}
               resizeMode="contain"
             />
           </View>
-
-          {/* App Title directly below Logo */}
-          <Text className="text-3xl font-extrabold text-slate-900 dark:text-white" style={styles.splashTitle}>
-            MediRem
-          </Text>
 
           {/* Subtitle / Tagline */}
           <Text className="text-base font-medium text-slate-500 dark:text-slate-400 mb-16" style={styles.splashSub}>
@@ -230,7 +225,7 @@ export default function LandingScreen() {
           style={styles.brandPill}
           activeOpacity={0.7}>
           <Image
-            source={require('@/../assets/images/medirem-logo.png')}
+            source={require('@/../assets/images/icon-symbol.png')}
             style={{ width: 22, height: 22, borderRadius: 6 }}
             resizeMode="contain"
           />
@@ -637,9 +632,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   splashLogoImg: {
-    width: 120,
-    height: 120,
-    borderRadius: 28,
+    width: 220,
+    height: 220,
   },
   splashLogo: {
     width: 96,

@@ -168,11 +168,10 @@ export default function ProfileScreen() {
         <View className="items-center justify-center py-5 px-4 mb-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
           <Image
             source={require('@/../assets/images/medirem-logo.png')}
-            style={{ width: 80, height: 80, borderRadius: 18, marginBottom: 8 }}
+            style={{ width: 140, height: 140, marginBottom: 2 }}
             resizeMode="contain"
           />
-          <Text className="text-base font-extrabold text-slate-900 dark:text-white">MediRem</Text>
-          <Text className="text-xs text-slate-400 mt-0.5">Version 1.0.0 • Your Daily Health Companion</Text>
+          <Text className="text-xs text-slate-400 mt-1">Version 1.0.0 • Your Daily Health Companion</Text>
         </View>
 
         {/* Log Out Button */}

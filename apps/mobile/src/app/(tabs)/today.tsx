@@ -248,7 +248,7 @@ export default function HomeScreen() {
           <View className="flex-row items-center gap-2.5">
             <TouchableOpacity onPress={() => router.push('/(tabs)/meds')} activeOpacity={0.8}>
               <Image
-                source={require('@/../assets/images/medirem-logo.png')}
+                source={require('@/../assets/images/icon-symbol.png')}
                 style={{ width: 38, height: 38, borderRadius: 10 }}
                 resizeMode="contain"
               />
