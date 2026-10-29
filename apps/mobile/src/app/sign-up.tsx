@@ -124,24 +124,12 @@ export default function SignUpScreen() {
         phone: phone.trim() || undefined,
       }).unwrap();
 
-      if (result.requiresVerification) {
-        dispatch(setPendingEmail(cleanEmail));
-        setReceivedCode(result.code || null);
-        setVerifyCode(''); // Clean field ready for user entry
-        setResendCountdown(60); // 60s cooldown
-        setStep('verify');
-      } else {
-        Alert.alert(
-          'Account Created! 🎉',
-          `Welcome to MediRem, ${name.trim()}!\n\nPlease sign in with your credentials.`,
-          [
-            {
-              text: 'Go to Sign In',
-              onPress: () => router.replace({ pathname: '/sign-in', params: { email: cleanEmail } }),
-            },
-          ]
-        );
-      }
+      // ALWAYS transition to 6-digit code verification step!
+      dispatch(setPendingEmail(cleanEmail));
+      setReceivedCode(result?.code || null);
+      setVerifyCode(''); // Clean field ready for user entry
+      setResendCountdown(60); // 60s cooldown
+      setStep('verify');
     } catch (err: any) {
       const msg =
         err?.data?.message ||
@@ -449,10 +437,28 @@ export default function SignUpScreen() {
                     <ActivityIndicator color="#FFFFFF" size="small" />
                   ) : (
                     <>
-                      <Text style={styles.primaryButtonText}>Create Account</Text>
+                      <Text style={styles.primaryButtonText}>Create Account & Send Code</Text>
                       <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
                     </>
                   )}
+                </TouchableOpacity>
+
+                {/* Direct shortcut to verification screen if user already received code */}
+                <TouchableOpacity
+                  onPress={() => {
+                    if (!email.trim() || !email.includes('@')) {
+                      setErrorMessage('Please enter your email above first, then click here to enter your code.');
+                      return;
+                    }
+                    setErrorMessage(null);
+                    setStep('verify');
+                  }}
+                  style={styles.alreadyHaveCodeButton}
+                  activeOpacity={0.7}>
+                  <Ionicons name="key-outline" size={15} color="#208AEF" />
+                  <Text style={styles.alreadyHaveCodeText}>
+                    Already have a verification code? <Text style={styles.alreadyHaveCodeLink}>Enter Code</Text>
+                  </Text>
                 </TouchableOpacity>
               </View>
 
@@ -483,12 +489,12 @@ export default function SignUpScreen() {
                 </Text>
               </View>
 
-              {/* Optional Developer Help Chip (shown in development only) */}
+              {/* Developer / Live Help Chip */}
               {receivedCode && (
                 <View style={styles.infoBanner}>
                   <Ionicons name="key-outline" size={16} color="#0284C7" />
                   <Text style={styles.infoBannerText}>
-                    Email Sent! Code: <Text style={{ fontWeight: '800' }}>{receivedCode}</Text>
+                    Code sent to your Gmail: <Text style={{ fontWeight: '800' }}>{receivedCode}</Text>
                   </Text>
                 </View>
               )}
@@ -501,46 +507,46 @@ export default function SignUpScreen() {
               )}
 
               <View style={styles.formContainer}>
-                {/* 6 Individual Interactive OTP Digit Boxes */}
+                {/* 6 Individual Interactive OTP Digit Boxes with full overlay touch input */}
                 <Text style={styles.inputLabel}>Enter 6-Digit Code</Text>
-                <TouchableOpacity
-                  activeOpacity={1}
-                  onPress={() => codeInputRef.current?.focus()}
-                  style={styles.otpBoxesRow}>
-                  {[0, 1, 2, 3, 4, 5].map((idx) => {
-                    const digit = digits[idx] || '';
-                    const isCurrent = verifyCode.length === idx;
-                    return (
-                      <View
-                        key={idx}
-                        style={[
-                          styles.otpBox,
-                          isCurrent && styles.otpBoxActive,
-                          digit ? styles.otpBoxFilled : null,
-                        ]}>
-                        <Text style={styles.otpDigit}>{digit || (isCurrent ? '|' : '•')}</Text>
-                      </View>
-                    );
-                  })}
-                </TouchableOpacity>
+                <View style={styles.otpContainer}>
+                  <View style={styles.otpBoxesRow} pointerEvents="none">
+                    {[0, 1, 2, 3, 4, 5].map((idx) => {
+                      const digit = digits[idx] || '';
+                      const isCurrent = verifyCode.length === idx;
+                      return (
+                        <View
+                          key={idx}
+                          style={[
+                            styles.otpBox,
+                            isCurrent && styles.otpBoxActive,
+                            digit ? styles.otpBoxFilled : null,
+                          ]}>
+                          <Text style={styles.otpDigit}>{digit || (isCurrent ? '|' : '•')}</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
 
-                {/* Hidden Native Input */}
-                <TextInput
-                  ref={codeInputRef}
-                  style={styles.hiddenInput}
-                  value={verifyCode}
-                  onChangeText={(val) => {
-                    const cleaned = val.replace(/[^0-9]/g, '').slice(0, 6);
-                    setVerifyCode(cleaned);
-                    if (errorMessage) setErrorMessage(null);
-                    if (cleaned.length === 6) {
-                      handleVerifySignup(cleaned);
-                    }
-                  }}
-                  keyboardType="number-pad"
-                  maxLength={6}
-                  caretHidden
-                />
+                  {/* Native full-width overlay input */}
+                  <TextInput
+                    ref={codeInputRef}
+                    style={styles.fullOverlayInput}
+                    value={verifyCode}
+                    onChangeText={(val) => {
+                      const cleaned = val.replace(/[^0-9]/g, '').slice(0, 6);
+                      setVerifyCode(cleaned);
+                      if (errorMessage) setErrorMessage(null);
+                      if (cleaned.length === 6) {
+                        handleVerifySignup(cleaned);
+                      }
+                    }}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    autoFocus
+                    caretHidden
+                  />
+                </View>
 
                 {/* Verify Code Button */}
                 <TouchableOpacity
@@ -794,11 +800,37 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#0F172A',
   },
-  hiddenInput: {
+  otpContainer: {
+    position: 'relative',
+    marginVertical: 10,
+    height: 60,
+    justifyContent: 'center',
+  },
+  fullOverlayInput: {
     position: 'absolute',
-    opacity: 0.01,
-    width: 1,
-    height: 1,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: 60,
+    opacity: 0,
+  },
+  alreadyHaveCodeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    marginTop: 4,
+  },
+  alreadyHaveCodeText: {
+    fontSize: 13,
+    color: '#64748B',
+  },
+  alreadyHaveCodeLink: {
+    color: '#208AEF',
+    fontWeight: '700',
   },
   eyeIcon: {
     padding: 6,

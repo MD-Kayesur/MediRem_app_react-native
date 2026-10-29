@@ -61,33 +61,30 @@ export class AuthService {
     });
 
     if (existing) {
-      if (existing.isVerified) {
-        throw new BadRequestException(
-          'An account with this email already exists and is verified. Please sign in instead.',
-        );
-      } else {
-        // User created earlier but not verified yet - update info & re-send code
-        await this.prisma.user.update({
-          where: { id: existing.id },
-          data: {
-            name,
-            password: hashedPassword || existing.password,
-            phone: data.phone?.trim() || existing.phone,
-            verifyCode,
-            verifyCodeExpiresAt,
-          },
-        });
+      // Re-register or existing account: update user details, generate a fresh 6-digit OTP code,
+      // and send it via Gmail Nodemailer so the user can always verify and access the code page
+      await this.prisma.user.update({
+        where: { id: existing.id },
+        data: {
+          name,
+          password: hashedPassword || existing.password,
+          phone: data.phone?.trim() || existing.phone,
+          isVerified: false,
+          verifyCode,
+          verifyCodeExpiresAt,
+        },
+      });
 
-        await this.mailService.sendSignupVerificationOtp(email, name, verifyCode);
+      await this.mailService.sendSignupVerificationOtp(email, name, verifyCode);
 
-        return {
-          success: true,
-          requiresVerification: true,
-          email,
-          code: verifyCode,
-          message: `Verification code sent to ${email}. Please enter the code to complete registration.`,
-        };
-      }
+      return {
+        success: true,
+        requiresVerification: true,
+        userId: existing.id,
+        email,
+        code: verifyCode,
+        message: `Verification code sent to ${email}. Please enter the 6-digit code in the app to complete registration.`,
+      };
     }
 
     // Create user in Neon PostgreSQL with isVerified: false

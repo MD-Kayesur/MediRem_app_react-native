@@ -9,7 +9,11 @@ export function getApiBaseUrl(): string {
   }
 
   // 2. Check if running on a real device through Expo Go / Metro bundler
-  const hostUri = Constants.expoConfig?.hostUri;
+  const hostUri =
+    Constants.expoConfig?.hostUri ||
+    (Constants as any).manifest2?.extra?.expoGo?.debuggerHost ||
+    (Constants as any).manifest?.debuggerHost;
+
   if (hostUri) {
     const host = hostUri.split(':')[0];
     if (host && host !== 'localhost' && host !== '127.0.0.1') {
@@ -18,7 +22,13 @@ export function getApiBaseUrl(): string {
   }
 
   // 3. Android Emulator uses 10.0.2.2, iOS Simulator & Web use localhost
-  return Platform.OS === 'android' ? 'http://10.0.2.2:3000/api' : 'http://localhost:3000/api';
+  if (Platform.OS === 'android') {
+    return 'http://10.0.2.2:3000/api';
+  }
+  if (Platform.OS === 'ios') {
+    return 'http://10.10.23.22:3000/api';
+  }
+  return 'http://localhost:3000/api';
 }
 
 export const API_BASE_URL = getApiBaseUrl();
