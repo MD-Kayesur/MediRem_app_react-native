@@ -1,0 +1,46 @@
+{
+  "version": "1.0.0",
+  "skills": {
+    "neon-postgres": {
+      "version": "latest",
+      "source": "https://neon.com/.well-known/agent-skills"
+    },
+    "neon-postgres-egress-optimizer": {
+      "version": "latest",
+      "source": "https://neon.com/.well-known/agent-skills"
+    },
+    "neon-postgres-branches": {
+      "version": "latest",
+      "source": "https://neon.com/.well-known/agent-skills"
+    },
+    "neon": {
+      "version": "latest",
+      "source": "https://neon.com/.well-known/agent-skills"
+    },
+    "neon-auth": {
+      "version": "latest",
+      "source": "https://neon.com/.well-known/agent-skills"
+    },
+    "neon-postgres-agent-platforms": {
+      "version": "latest",
+      "source": "https://neon.com/.well-known/agent-skills"
+    },
+    "neon-object-storage": {
+      "version": "latest",
+      "source": "https://neon.com/.well-known/agent-skills"
+    },
+    "neon-ai-gateway": {
+      "version": "latest",
+      "source": "https://neon.com/.well-known/agent-skills"
+    },
+    "neon-functions": {
+      "version": "latest",
+      "source": "https://neon.com/.well-known/agent-skills"
+    },
+    "neon-realtime": {
+      "version": "latest",
+      "source": "https://neon.com/.well-known/agent-skills"
+    }
+  },
+  "installedAt": "2026-10-29T13:01:28.605Z"
+}
