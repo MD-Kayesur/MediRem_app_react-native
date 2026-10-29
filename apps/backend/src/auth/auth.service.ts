@@ -27,6 +27,8 @@ export class AuthService {
       data: {
         name: data.name.trim(),
         email,
+        password: data.password,
+        phone: data.phone,
       },
     });
 
@@ -35,6 +37,7 @@ export class AuthService {
         id: user.id,
         name: user.name,
         email: user.email,
+        phone: user.phone ?? undefined,
         createdAt: user.createdAt.toISOString(),
       },
       message: 'Account created successfully.',
@@ -54,6 +57,7 @@ export class AuthService {
         data: {
           name: defaultName.charAt(0).toUpperCase() + defaultName.slice(1),
           email,
+          password: data.password,
         },
       });
     }
@@ -63,6 +67,7 @@ export class AuthService {
         id: user.id,
         name: user.name,
         email: user.email,
+        phone: user.phone ?? undefined,
         createdAt: user.createdAt.toISOString(),
       },
       message: 'Signed in successfully.',
@@ -80,3 +85,4 @@ export class AuthService {
     return user;
   }
 }
+

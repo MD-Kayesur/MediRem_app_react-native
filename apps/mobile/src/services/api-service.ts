@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { Medication } from '@medirem/types';
 
 /**
  * Default backend API base URL
@@ -7,24 +8,7 @@ import { Platform } from 'react-native';
 export const API_BASE_URL =
   Platform.OS === 'android' ? 'http://10.0.2.2:3000/api' : 'http://localhost:3000/api';
 
-export interface ServerMedication {
-  id: string;
-  name: string;
-  dosage: string;
-  instructions?: string;
-  frequency?: string;
-  selectedDays?: string;
-  startDate?: string;
-  endDate?: string;
-  time: string;
-  timeSlot: string;
-  pillsLeft: number;
-  totalPills: number;
-  imageUri?: string;
-  status: string;
-  alarmEnabled: boolean;
-  notificationId?: string;
-}
+export type ServerMedication = Medication;
 
 export async function checkBackendHealth(): Promise<{ status: string; uptime?: number } | null> {
   try {

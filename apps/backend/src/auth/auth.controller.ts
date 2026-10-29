@@ -20,3 +20,4 @@ export class AuthController {
     return this.authService.getProfile(id);
   }
 }
+
