@@ -62,7 +62,6 @@ const INITIAL_MEDS: Medication[] = [
     nextDose: 'Today, 1:00 PM',
     pillsLeft: 18,
     totalPills: 30,
-    refillWarning: 'Refill Reminder: 2 days left',
     status: 'active',
     alarmEnabled: true,
   },
@@ -76,7 +75,7 @@ const INITIAL_MEDS: Medication[] = [
     endDate: 'Ongoing',
     time: '08:00 AM',
     timeSlot: 'Morning',
-    nextDose: 'Tomorrow, 08:00 AM',
+    nextDose: 'Today, 08:00 AM',
     pillsLeft: 24,
     totalPills: 30,
     status: 'active',
@@ -1122,7 +1121,7 @@ export default function MedsScreen() {
                         : styles.timerPillDue,
                     ]}>
                     <Ionicons
-                      name={isThisDoseSnoozed3m ? 'time' : 'volume-high'}
+                      name={isThisDoseSnoozed3m ? 'time' : 'alert-circle'}
                       size={13}
                       color="#FFFFFF"
                       style={{ marginRight: 4 }}
@@ -1138,7 +1137,7 @@ export default function MedsScreen() {
                         ? `Ringing (${ringSecondsLeft}s)`
                         : isThisDoseSnoozed3m
                         ? 'Stop Alarm'
-                        : countdown.text}
+                        : `${countdown.text} late`}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -1354,12 +1353,14 @@ export default function MedsScreen() {
                 </View>
               </View>
 
-              {/* Refill Alert Badge if applicable */}
-              {med.refillWarning && (
+              {/* Refill Alert Badge: only when supply is genuinely low (<= 5 pills) */}
+              {med.pillsLeft <= 5 && (
                 <View className="flex-row items-center gap-2 mt-3 p-2.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-100 dark:border-rose-900 rounded-xl" style={styles.refillBadge}>
                   <Ionicons name="alert-circle" size={16} color="#EF4444" />
                   <Text className="text-xs font-semibold text-rose-600 dark:text-rose-400" style={styles.refillText}>
-                    {med.refillWarning}
+                    {med.pillsLeft === 0
+                      ? '⚠️ Out of pills — Refill required immediately!'
+                      : `Refill Alert: Only ${med.pillsLeft} ${med.pillsLeft === 1 ? 'pill' : 'pills'} left in supply!`}
                   </Text>
                 </View>
               )}
