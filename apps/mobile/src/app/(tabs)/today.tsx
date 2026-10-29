@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { triggerAudibleAlarm, stopAudibleAlarm } from '@/services/sound-service';
+import { subscribeToAuth, getCurrentUser } from '@/services/auth-service';
 
 interface DoseItem {
   id: string;
@@ -139,8 +140,13 @@ const INITIAL_DOSES: DoseItem[] = [
 ];
 
 export default function HomeScreen() {
+  const [user, setUser] = useState(() => getCurrentUser());
   const [doses, setDoses] = useState<DoseItem[]>(INITIAL_DOSES);
   const [currentTime, setCurrentTime] = useState(() => new Date());
+
+  useEffect(() => {
+    return subscribeToAuth((u) => setUser(u));
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -239,7 +245,7 @@ export default function HomeScreen() {
                 Good Morning, ☀️
               </Text>
               <Text className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight" style={styles.userName}>
-                Rahman
+                {user?.name || 'Friend'}
               </Text>
               <Text className="text-xs text-slate-400" style={styles.userStatus}>Stay healthy, stay strong!</Text>
             </View>

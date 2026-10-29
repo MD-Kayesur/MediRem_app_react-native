@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,9 +12,15 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { subscribeToAuth, signOut, getCurrentUser } from '@/services/auth-service';
 
 export default function ProfileScreen() {
+  const [user, setUser] = useState(() => getCurrentUser());
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+
+  useEffect(() => {
+    return subscribeToAuth((u) => setUser(u));
+  }, []);
 
   const handleLogOut = () => {
     Alert.alert('Log Out', 'Are you sure you want to log out of MediRem?', [
@@ -22,7 +28,10 @@ export default function ProfileScreen() {
       {
         text: 'Log Out',
         style: 'destructive',
-        onPress: () => router.replace('/'),
+        onPress: () => {
+          signOut();
+          router.replace('/sign-in');
+        },
       },
     ]);
   };
@@ -47,17 +56,28 @@ export default function ProfileScreen() {
           <View className="flex-1">
             <View className="flex-row items-center gap-2">
               <Text className="text-lg font-extrabold text-slate-900 dark:text-white" style={styles.userName}>
-                Rahman
+                {user?.name || 'Guest User'}
               </Text>
               <View className="bg-blue-100 dark:bg-sky-950 px-2 py-0.5 rounded-md" style={styles.patientBadge}>
-                <Text className="text-[10px] font-bold text-primary" style={{ color: '#208AEF' }}>Patient</Text>
+                <Text className="text-[10px] font-bold text-primary" style={{ color: '#208AEF' }}>
+                  {user ? 'Member' : 'Guest'}
+                </Text>
               </View>
             </View>
-            <Text className="text-xs text-slate-500 mt-0.5" style={styles.userEmail}>rahman@example.com</Text>
+            <Text className="text-xs text-slate-500 mt-0.5" style={styles.userEmail}>
+              {user?.email || 'guest@medirem.local'}
+            </Text>
             <Text className="text-[11px] text-emerald-600 font-semibold mt-0.5" style={{ color: '#10B981' }}>
               ● Synchronized Locally
             </Text>
           </View>
+          {(!user || user.email === 'guest@medirem.local') && (
+            <TouchableOpacity
+              onPress={() => router.push('/sign-in')}
+              style={{ paddingVertical: 6, paddingHorizontal: 10, backgroundColor: '#208AEF', borderRadius: 12 }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#FFFFFF' }}>Sign In</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Section: Health & Personal */}

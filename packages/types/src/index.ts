@@ -66,3 +66,30 @@ export interface HealthCheckResponse {
   uptime: number;
 }
 
+export interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  avatarUrl?: string;
+  createdAt?: string;
+}
+
+export interface SignInInput {
+  email: string;
+  password?: string;
+}
+
+export interface SignUpInput {
+  name: string;
+  email: string;
+  password?: string;
+  phone?: string;
+}
+
+export interface AuthResponse {
+  user: AuthUser;
+  token?: string;
+}
+
+

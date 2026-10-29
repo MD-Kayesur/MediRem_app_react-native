@@ -74,7 +74,7 @@ export default function LandingScreen() {
       flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
       setCurrentIndex(nextIndex);
     } else {
-      router.push('/(tabs)/today');
+      router.push('/sign-up');
     }
   };
 
@@ -324,7 +324,7 @@ export default function LandingScreen() {
 
         {/* Secondary Action */}
         <TouchableOpacity
-          onPress={() => router.push('/(tabs)/today')}
+          onPress={() => router.push('/sign-in')}
           className="mt-3.5 py-1.5"
           style={styles.secondaryBtn}
           activeOpacity={0.7}>
