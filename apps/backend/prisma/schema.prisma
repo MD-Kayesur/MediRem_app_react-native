@@ -9,11 +9,26 @@ datasource db {
   directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
+// Enum for user roles
+enum Role{
+  ADMIN
+  USER
+}
+
+model Role{
+  id        String   @id @default(uuid())
+  role      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+
 model User {
   id                  String        @id @default(uuid())
   email               String?       @unique
   name                String        @default("User")
   password            String?
+  role                Role          @default(USER)
   phone               String?
   isVerified          Boolean       @default(false)
   verifyCode          String?       // 6-digit OTP code for signup verification
@@ -28,6 +43,7 @@ model User {
 model Medication {
   id             String     @id @default(uuid())
   name           String
+  role           Role
   dosage         String
   instructions   String?
   frequency      String     @default("Every day")
@@ -51,6 +67,7 @@ model Medication {
 
 model DoseLog {
   id            String      @id @default(uuid())
+  role          Role
   medicationId  String
   medication    Medication  @relation(fields: [medicationId], references: [id], onDelete: Cascade)
   scheduledTime String

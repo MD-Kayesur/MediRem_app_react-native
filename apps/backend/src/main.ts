@@ -29,6 +29,7 @@ async function bootstrap() {
   await app.listen(port, '0.0.0.0');
   logger.log(`🚀 MediRem NestJS Backend running at http://0.0.0.0:${port}/api (accessible via localhost & LAN)`);
   logger.log(`💊 Health check available at http://localhost:${port}/api/health`);
+  console.log(`💊 Health check available at http://localhost:${port}/api/health`);
 }
 bootstrap();
 
