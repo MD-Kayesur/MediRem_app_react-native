@@ -173,7 +173,9 @@ export class AuthService {
         createdAt: updated.createdAt.toISOString(),
       },
       message: 'Account verified successfully! Please sign in with your credentials.',
+      
     };
+  
   }
 
   /**
@@ -236,14 +238,14 @@ export class AuthService {
 
     if (!user) {
       // Auto-create demo/test user if it is rahman@medirem.app
-      if (email === 'rahman@medirem.app') {
-        const demoHashed = await bcrypt.hash(data.password || 'medirem123', 10);
+      if (email) {
+        const demoHashed = await bcrypt.hash(data.password || '', 10);
         const demoUser = await this.prisma.user.create({
           data: {
-            name: 'Rahman',
+            name: '',
             email,
             password: demoHashed,
-            phone: '+1 (555) 234-5678',
+            phone: '',
             isVerified: true,
           },
         });
@@ -258,7 +260,7 @@ export class AuthService {
             createdAt: demoUser.createdAt.toISOString(),
           },
           token,
-          message: 'Signed in successfully as Demo User.',
+          message: 'Signed in successfully.',
         };
       }
 
@@ -460,7 +462,7 @@ export class AuthService {
         resetCodeExpiresAt: null,
       },
     });
-
+console.log(`Password reset completed successfully for ${user.email}`);
     this.logger.log(`Password reset completed successfully for ${user.email}`);
 
     return {
@@ -479,6 +481,7 @@ export class AuthService {
       throw new BadRequestException('User not found');
     }
     const { password, resetCode, resetCodeExpiresAt, verifyCode, verifyCodeExpiresAt, ...safeUser } = user;
+    console.log(safeUser);
     return safeUser;
   }
 }
