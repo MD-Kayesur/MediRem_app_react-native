@@ -5,8 +5,9 @@ import { PrismaService } from '../prisma/prisma.service';
 export class DosesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getHistory(limit = 50) {
+  async getHistory(limit = 50, userId?: string) {
     return this.prisma.doseLog.findMany({
+      where: userId ? { medication: { userId } } : {},
       take: limit,
       orderBy: { takenAt: 'desc' },
       include: {
@@ -17,6 +18,7 @@ export class DosesService {
             dosage: true,
             imageUri: true,
             time: true,
+            userId: true,
           },
         },
       },

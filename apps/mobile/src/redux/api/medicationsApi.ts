@@ -68,8 +68,8 @@ export const medicationsApi = apiSlice.injectEndpoints({
       },
     }),
 
-    getDoseHistory: builder.query<any[], void>({
-      query: () => '/doses/history',
+    getDoseHistory: builder.query<any[], string | void>({
+      query: (userId) => (userId ? `/doses/history?userId=${userId}` : '/doses/history'),
       providesTags: ['Doses'],
     }),
 
