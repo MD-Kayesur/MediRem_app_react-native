@@ -13,6 +13,7 @@ export interface Medication {
   endDate?: string;
   time: string;
   timeSlot: 'Morning' | 'Afternoon' | 'Evening' | 'Night' | string;
+  times?: string; // JSON array of dose times e.g. [{"slot":"Morning","time":"08:00 AM"},{"slot":"Afternoon","time":"01:00 PM"},{"slot":"Night","time":"08:00 PM"}]
   pillsLeft: number;
   totalPills: number;
   imageUri?: string;
@@ -34,6 +35,7 @@ export interface CreateMedicationInput {
   endDate?: string;
   time?: string;
   timeSlot?: 'Morning' | 'Afternoon' | 'Evening' | 'Night' | string;
+  times?: string;
   pillsLeft?: number;
   totalPills?: number;
   imageUri?: string;

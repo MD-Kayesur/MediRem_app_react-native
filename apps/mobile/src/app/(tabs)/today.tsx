@@ -15,6 +15,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { triggerAudibleAlarm, stopAudibleAlarm } from '@/utils/alarm';
 import {
   checkRoutineForToday,
+  isDoseTakenToday,
+  getMedicationDoseSlots,
 } from '@/utils/routineSchedule';
 import { useAppSelector } from '@/redux/hooks';
 import { selectCurrentUser } from '@/redux/slices/authSlice';
@@ -22,7 +24,8 @@ import { useGetMedicationsQuery, useTakeDoseMutation } from '@/redux';
 
 interface DoseItem {
   id: string;
-  timeSlot: 'Morning' | 'Afternoon' | 'Evening' | 'Night';
+  medicationId: string;
+  timeSlot: 'Morning' | 'Afternoon' | 'Evening' | 'Night' | string;
   time: string;
   medicationName: string;
   dosage: string;
@@ -115,7 +118,8 @@ function getCountdownInfo(timeStr: string | undefined, now: Date): {
 
 const INITIAL_DOSES: DoseItem[] = [
   {
-    id: '1',
+    id: 'init_1',
+    medicationId: '1',
     timeSlot: 'Morning',
     time: '08:00 AM',
     medicationName: 'Paracetamol',
@@ -123,7 +127,8 @@ const INITIAL_DOSES: DoseItem[] = [
     status: 'taken',
   },
   {
-    id: '2',
+    id: 'init_2',
+    medicationId: '2',
     timeSlot: 'Afternoon',
     time: '01:00 PM',
     medicationName: 'Vitamin D3',
@@ -131,7 +136,8 @@ const INITIAL_DOSES: DoseItem[] = [
     status: 'pending',
   },
   {
-    id: '3',
+    id: 'init_3',
+    medicationId: '3',
     timeSlot: 'Evening',
     time: '07:00 PM',
     medicationName: 'Metformin',
@@ -139,7 +145,8 @@ const INITIAL_DOSES: DoseItem[] = [
     status: 'pending',
   },
   {
-    id: '4',
+    id: 'init_4',
+    medicationId: '4',
     timeSlot: 'Night',
     time: '10:00 PM',
     medicationName: 'Atorvastatin',
@@ -166,37 +173,44 @@ export default function HomeScreen() {
   const [takenIds, setTakenIds] = useState<Set<string>>(() => new Set());
   const [currentTime, setCurrentTime] = useState(() => new Date());
 
-  // Dynamically derive today's dose cards directly from Neon database rows (strictly deduplicated by ID)
-  // Enforces:
-  // 1. Checks if taken today in Neon DB doseLogs or local intake -> marks status: 'taken'
-  // 2. Checks inventory (pillsLeft) -> marks out of stock
-  // 3. Checks schedule days of week & dates -> sets isScheduledToday
+  // Dynamically derive today's dose cards directly from Neon database rows
+  // Supports multiple doses per day (e.g. 1, 2, 3 times daily: Morning, Noon, Night):
+  // 1. Expands every medication into its scheduled daily time slots
+  // 2. Checks if taken today in Neon DB doseLogs or local intake for that specific dose slot
+  // 3. Checks inventory (pillsLeft) -> marks out of stock
+  // 4. Checks schedule days of week & dates -> sets isScheduledToday
   const doses: DoseItem[] = useMemo(() => {
     const list = dbMeds && dbMeds.length > 0 ? dbMeds : INITIAL_DOSES;
-    const map = new Map<string, DoseItem>();
+    const items: DoseItem[] = [];
 
     list.forEach((item: any) => {
-      const id = item.id;
-      if (!id || map.has(id)) return;
+      const medId = item.id;
+      if (!medId) return;
 
       const routineCheck = checkRoutineForToday(item, currentTime);
-      const isTaken = routineCheck.isTakenToday || takenIds.has(id);
+      const slots = getMedicationDoseSlots(item);
 
-      map.set(id, {
-        id,
-        timeSlot: (item.timeSlot as any) || 'Morning',
-        time: item.time || '08:00 AM',
-        medicationName: item.name || item.medicationName,
-        dosage: item.dosage,
-        status: isTaken ? 'taken' : 'pending',
-        imageUri: item.imageUri || undefined,
-        isScheduledToday: routineCheck.isScheduledToday,
-        isOutOfStock: routineCheck.isOutOfStock,
-        pillsLeft: routineCheck.pillsLeft,
+      slots.forEach((slot) => {
+        const doseKey = `${medId}_${slot.slot}_${slot.time.replace(/[:\s]/g, '')}`;
+        const isTaken = isDoseTakenToday(item, takenIds, slot.time) || takenIds.has(doseKey);
+
+        items.push({
+          id: doseKey,
+          medicationId: medId,
+          timeSlot: slot.slot,
+          time: slot.time,
+          medicationName: item.name || item.medicationName,
+          dosage: item.dosage,
+          status: isTaken ? 'taken' : 'pending',
+          imageUri: item.imageUri || undefined,
+          isScheduledToday: routineCheck.isScheduledToday,
+          isOutOfStock: routineCheck.isOutOfStock,
+          pillsLeft: routineCheck.pillsLeft,
+        });
       });
     });
 
-    return Array.from(map.values());
+    return items;
   }, [dbMeds, takenIds, currentTime]);
 
   useEffect(() => {
@@ -242,7 +256,11 @@ export default function HomeScreen() {
   const toggleDose = async (id: string) => {
     // 1. Immediately silence ringing audio alarm!
     stopAudibleAlarm();
-    const isCurrentlyTaken = takenIds.has(id) || doses.find((d) => d.id === id)?.status === 'taken';
+    const doseItem = doses.find((d) => d.id === id);
+    const medId = doseItem?.medicationId || id;
+    const scheduledTime = doseItem?.time;
+
+    const isCurrentlyTaken = takenIds.has(id) || doseItem?.status === 'taken';
 
     setTakenIds((prev) => {
       const next = new Set(prev);
@@ -261,7 +279,7 @@ export default function HomeScreen() {
     // 3. Persist intake and decrement pill count in Neon Cloud PostgreSQL
     if (!isCurrentlyTaken) {
       try {
-        await takeDoseMutation(id).unwrap();
+        await takeDoseMutation({ id: medId, scheduledTime }).unwrap();
       } catch (e) {
         console.warn('Take dose DB call error:', e);
       }
@@ -296,11 +314,14 @@ export default function HomeScreen() {
       case 'Morning':
         return { icon: 'sunny' as const, bg: '#DCFCE7', color: '#10B981' };
       case 'Afternoon':
+      case 'Noon':
         return { icon: 'partly-sunny' as const, bg: '#E6F4FE', color: '#208AEF' };
       case 'Evening':
         return { icon: 'cloudy-night' as const, bg: '#FEF3C7', color: '#F59E0B' };
       case 'Night':
         return { icon: 'moon' as const, bg: '#EEF2FF', color: '#6366F1' };
+      default:
+        return { icon: 'alarm-outline' as const, bg: '#E6F4FE', color: '#208AEF' };
     }
   };
 

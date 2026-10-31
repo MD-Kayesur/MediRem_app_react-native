@@ -30,6 +30,8 @@ import {
 } from '@/utils/alarm';
 import {
   checkRoutineForToday,
+  getMedicationDoseSlots,
+  DoseSlotInfo,
 } from '@/utils/routineSchedule';
 import {
   useGetMedicationsQuery,
@@ -50,7 +52,8 @@ interface Medication {
   startDate?: string;
   endDate?: string;
   time: string;
-  timeSlot: 'Morning' | 'Afternoon' | 'Evening' | 'Night';
+  timeSlot: 'Morning' | 'Afternoon' | 'Evening' | 'Night' | string;
+  times?: string;
   nextDose: string;
   pillsLeft: number;
   totalPills: number;
@@ -384,6 +387,7 @@ export default function MedsScreen() {
           endDate: m.endDate || 'Ongoing',
           time: m.time || '08:00 AM',
           timeSlot: (m.timeSlot as any) || 'Morning',
+          times: m.times,
           nextDose: `Today, ${m.time || '08:00 AM'}`,
           pillsLeft,
           totalPills,
@@ -537,6 +541,16 @@ export default function MedsScreen() {
   const [selectedDays, setSelectedDays] = useState<string[]>(['Mon', 'Wed', 'Fri']);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<'Morning' | 'Afternoon' | 'Evening' | 'Night'>('Morning');
   const [customTime, setCustomTime] = useState('08:00 AM');
+
+  // Multi-dose per day state (1x, 2x, 3x [Morning, Noon, Night], 4x)
+  const [dosesPerDay, setDosesPerDay] = useState<1 | 2 | 3 | 4>(1);
+  const [dailySlots, setDailySlots] = useState<DoseSlotInfo[]>([
+    { slot: 'Morning', time: '08:00 AM' },
+    { slot: 'Afternoon', time: '01:00 PM' },
+    { slot: 'Night', time: '08:00 PM' },
+    { slot: 'Evening', time: '06:00 PM' },
+  ]);
+  const [activeSlotEditIndex, setActiveSlotEditIndex] = useState<number>(0);
 
   // Calendar & Time Picker Modals State
   const formatDisplayDate = (d: Date) => {
@@ -779,6 +793,14 @@ export default function MedsScreen() {
     setSelectedDays(['Mon', 'Wed', 'Fri']);
     setSelectedTimeSlot('Morning');
     setCustomTime('08:00 AM');
+    setDosesPerDay(1);
+    setDailySlots([
+      { slot: 'Morning', time: '08:00 AM' },
+      { slot: 'Afternoon', time: '01:00 PM' },
+      { slot: 'Night', time: '08:00 PM' },
+      { slot: 'Evening', time: '06:00 PM' },
+    ]);
+    setActiveSlotEditIndex(0);
     const now = new Date();
     setSelectedStartDate(now);
     setStartDateFormatted(`Today, ${formatDisplayDate(now)}`);
@@ -843,8 +865,24 @@ export default function MedsScreen() {
     else if (frequencyType === 'asneeded') frequencyLabel = 'As needed';
     else if (frequencyType === 'specific') frequencyLabel = selectedDays.join(', ');
 
+    const activeDoses: DoseSlotInfo[] =
+      dosesPerDay === 1
+        ? [{ slot: selectedTimeSlot, time: customTime.trim() || '08:00 AM' }]
+        : dosesPerDay === 2
+        ? [dailySlots[0], dailySlots[2]]
+        : dosesPerDay === 3
+        ? [dailySlots[0], dailySlots[1], dailySlots[2]]
+        : [dailySlots[0], dailySlots[1], dailySlots[3], dailySlots[2]];
+
+    const timesJson = JSON.stringify(activeDoses);
+    const finalTime = activeDoses[0].time;
+    const finalSlot = activeDoses[0].slot;
+
+    if (dosesPerDay > 1) {
+      frequencyLabel = `${dosesPerDay}x daily • ${frequencyLabel}`;
+    }
+
     const newMedId = Date.now().toString();
-    const finalTime = customTime.trim() || '08:00 AM';
     const finalStartDate = startDateFormatted;
     const finalEndDate = isOngoing ? 'Ongoing' : endDateFormatted;
     const totalPillsParsed = parseInt(pillsCount, 10) || 30;
@@ -873,7 +911,8 @@ export default function MedsScreen() {
         startDate: finalStartDate,
         endDate: finalEndDate,
         time: finalTime,
-        timeSlot: selectedTimeSlot,
+        timeSlot: finalSlot,
+        times: timesJson,
         pillsLeft: totalPillsParsed,
         totalPills: totalPillsParsed,
         imageUri: imageUri ?? undefined,
@@ -893,7 +932,8 @@ export default function MedsScreen() {
         startDate: finalStartDate,
         endDate: finalEndDate,
         time: finalTime,
-        timeSlot: selectedTimeSlot,
+        timeSlot: finalSlot,
+        times: timesJson,
         nextDose: `Today, ${finalTime}`,
         pillsLeft: totalPillsParsed,
         totalPills: totalPillsParsed,
@@ -1163,13 +1203,27 @@ export default function MedsScreen() {
 
               {/* Scheduled Days & Time Indicator */}
               <View className="flex-row items-center justify-between py-2 px-3 bg-slate-50 dark:bg-slate-700/40 rounded-xl mb-2" style={styles.nextDoseBar}>
-                <View className="flex-row items-center gap-1.5">
+                <View className="flex-row items-center gap-1.5 flex-1 flex-wrap">
                   <Ionicons name="time-outline" size={14} color="#208AEF" />
                   <Text className="text-xs text-slate-700 dark:text-slate-200" style={styles.nextDoseText}>
-                    Time: <Text className="font-bold">{med.time || '08:00 AM'}</Text> ({med.timeSlot})
+                    {getMedicationDoseSlots(med).length > 1 ? (
+                      <>
+                        <Text className="font-bold">{getMedicationDoseSlots(med).length} Doses/day: </Text>
+                        {getMedicationDoseSlots(med).map((s, idx) => (
+                          <Text key={idx} className="font-medium text-slate-600 dark:text-slate-300">
+                            {idx > 0 ? ' • ' : ''}
+                            {s.slot}: <Text className="font-bold">{s.time}</Text>
+                          </Text>
+                        ))}
+                      </>
+                    ) : (
+                      <>
+                        Time: <Text className="font-bold">{med.time || '08:00 AM'}</Text> ({med.timeSlot})
+                      </>
+                    )}
                   </Text>
                 </View>
-                <View className="flex-row items-center gap-1">
+                <View className="flex-row items-center gap-1 ml-2">
                   <Ionicons name="calendar-outline" size={13} color="#64748B" />
                   <Text className="text-xs text-slate-500">{med.frequency}</Text>
                 </View>
@@ -1617,59 +1671,166 @@ export default function MedsScreen() {
                 )}
               </View>
 
-              {/* Routine: Reminder Time with Interactive Time Picker */}
+              {/* Routine: Doses Per Day (1x, 2x, 3x [Morning, Noon, Night], 4x) */}
               <View className="mb-4">
                 <Text className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                  Routine: Reminder Time
+                  Doses Per Day
                 </Text>
-
-                {/* 4 Quick Preset Time Slot Buttons (Morning, Afternoon, Evening, Night) */}
-                <View className="flex-row gap-2 mb-2.5">
-                  {TIME_SLOTS.map((t) => {
-                    const isSlotSelected = selectedTimeSlot === t.slot;
+                <View className="flex-row gap-2 mb-2">
+                  {[
+                    { count: 1 as const, label: '1x Daily', desc: '1 dose' },
+                    { count: 2 as const, label: '2x Daily', desc: 'Morning, Night' },
+                    { count: 3 as const, label: '3x Daily', desc: 'Morn, Noon, Night' },
+                    { count: 4 as const, label: '4x Daily', desc: '4 doses' },
+                  ].map((item) => {
+                    const isSelected = dosesPerDay === item.count;
                     return (
                       <TouchableOpacity
-                        key={t.slot}
-                        onPress={() => handleTimeSlotSelect(t)}
-                        className={`flex-1 p-2 rounded-xl border items-center ${
-                          isSlotSelected
-                            ? 'bg-blue-50 border-primary dark:bg-sky-950/60'
+                        key={item.count}
+                        onPress={() => setDosesPerDay(item.count)}
+                        className={`flex-1 py-2 px-1 rounded-xl border items-center justify-center ${
+                          isSelected
+                            ? 'bg-primary border-primary'
                             : 'bg-slate-50 border-slate-200 dark:bg-slate-800 dark:border-slate-700'
                         }`}
                         style={[
-                          styles.timeSlotCard,
-                          isSlotSelected && { borderColor: '#208AEF', backgroundColor: '#E6F4FE' },
+                          styles.freqBtn,
+                          isSelected && { backgroundColor: '#208AEF', borderColor: '#208AEF' },
                         ]}>
-                        <Ionicons name={t.icon} size={18} color={t.color} />
-                        <Text className="text-[11px] font-bold text-slate-800 dark:text-white mt-1">
-                          {t.slot}
+                        <Text
+                          className={`text-xs font-bold ${
+                            isSelected ? 'text-white' : 'text-slate-700 dark:text-slate-300'
+                          }`}
+                          style={{ color: isSelected ? '#FFFFFF' : '#475569' }}>
+                          {item.label}
                         </Text>
-                        <Text className="text-[9px] text-slate-400">{t.defaultTime}</Text>
                       </TouchableOpacity>
                     );
                   })}
                 </View>
+              </View>
 
-                {/* Custom Time Selector Card (Surrounded by red box in mockup) */}
-                <TouchableOpacity
-                  onPress={() => setIsTimePickerOpen(true)}
-                  className="flex-row items-center justify-between p-3.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl"
-                  style={styles.pickerTriggerCard}
-                  activeOpacity={0.8}>
-                  <View className="flex-row items-center gap-3">
-                    <View className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-sky-950 items-center justify-center" style={styles.pickerIconBox}>
-                      <Ionicons name="time" size={20} color="#208AEF" />
+              {/* Routine: Reminder Time(s) */}
+              <View className="mb-4">
+                <Text className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                  {dosesPerDay > 1 ? `Scheduled Dose Times (${dosesPerDay}x Daily)` : 'Routine: Reminder Time'}
+                </Text>
+
+                {dosesPerDay === 1 ? (
+                  <>
+                    {/* 4 Quick Preset Time Slot Buttons (Morning, Afternoon, Evening, Night) */}
+                    <View className="flex-row gap-2 mb-2.5">
+                      {TIME_SLOTS.map((t) => {
+                        const isSlotSelected = selectedTimeSlot === t.slot;
+                        return (
+                          <TouchableOpacity
+                            key={t.slot}
+                            onPress={() => handleTimeSlotSelect(t)}
+                            className={`flex-1 p-2 rounded-xl border items-center ${
+                              isSlotSelected
+                                ? 'bg-blue-50 border-primary dark:bg-sky-950/60'
+                                : 'bg-slate-50 border-slate-200 dark:bg-slate-800 dark:border-slate-700'
+                            }`}
+                            style={[
+                              styles.timeSlotCard,
+                              isSlotSelected && { borderColor: '#208AEF', backgroundColor: '#E6F4FE' },
+                            ]}>
+                            <Ionicons name={t.icon} size={18} color={t.color} />
+                            <Text className="text-[11px] font-bold text-slate-800 dark:text-white mt-1">
+                              {t.slot}
+                            </Text>
+                            <Text className="text-[9px] text-slate-400">{t.defaultTime}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
                     </View>
-                    <View>
-                      <Text style={styles.pickerCardSub}>SCHEDULED TIME ({selectedTimeSlot})</Text>
-                      <Text style={styles.pickerCardValue}>{customTime}</Text>
-                    </View>
+
+                    {/* Custom Time Selector Card */}
+                    <TouchableOpacity
+                      onPress={() => {
+                        setActiveSlotEditIndex(0);
+                        setIsTimePickerOpen(true);
+                      }}
+                      className="flex-row items-center justify-between p-3.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl"
+                      style={styles.pickerTriggerCard}
+                      activeOpacity={0.8}>
+                      <View className="flex-row items-center gap-3">
+                        <View className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-sky-950 items-center justify-center" style={styles.pickerIconBox}>
+                          <Ionicons name="time" size={20} color="#208AEF" />
+                        </View>
+                        <View>
+                          <Text style={styles.pickerCardSub}>SCHEDULED TIME ({selectedTimeSlot})</Text>
+                          <Text style={styles.pickerCardValue}>{customTime}</Text>
+                        </View>
+                      </View>
+                      <View style={styles.pickerActionChip}>
+                        <Ionicons name="alarm-outline" size={13} color="#208AEF" />
+                        <Text style={styles.pickerActionText}>Custom Time</Text>
+                      </View>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  /* Multiple Daily Dose Times (e.g. 3x Daily: Morning, Noon, Night) */
+                  <View className="gap-2">
+                    {(dosesPerDay === 2
+                      ? [dailySlots[0], dailySlots[2]]
+                      : dosesPerDay === 3
+                      ? [dailySlots[0], dailySlots[1], dailySlots[2]]
+                      : [dailySlots[0], dailySlots[1], dailySlots[3], dailySlots[2]]
+                    ).map((slot, idx) => {
+                      const realIndex =
+                        dosesPerDay === 2
+                          ? idx === 0 ? 0 : 2
+                          : dosesPerDay === 3
+                          ? idx
+                          : idx === 2 ? 3 : idx === 3 ? 2 : idx;
+
+                      const slotLabel =
+                        slot.slot === 'Morning'
+                          ? 'Morning Dose'
+                          : slot.slot === 'Afternoon'
+                          ? 'Noon / Afternoon Dose'
+                          : slot.slot === 'Evening'
+                          ? 'Evening Dose'
+                          : 'Night Dose';
+
+                      const slotIcon =
+                        slot.slot === 'Morning'
+                          ? 'sunny'
+                          : slot.slot === 'Night'
+                          ? 'moon'
+                          : 'partly-sunny';
+
+                      return (
+                        <TouchableOpacity
+                          key={idx}
+                          onPress={() => {
+                            setActiveSlotEditIndex(realIndex);
+                            setIsTimePickerOpen(true);
+                          }}
+                          className="flex-row items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl"
+                          style={styles.pickerTriggerCard}
+                          activeOpacity={0.8}>
+                          <View className="flex-row items-center gap-3">
+                            <View className="w-9 h-9 rounded-xl bg-blue-100 dark:bg-sky-950 items-center justify-center" style={styles.pickerIconBox}>
+                              <Ionicons name={slotIcon} size={18} color="#208AEF" />
+                            </View>
+                            <View>
+                              <Text style={styles.pickerCardSub}>
+                                DOSE {idx + 1} • {slotLabel.toUpperCase()}
+                              </Text>
+                              <Text style={styles.pickerCardValue}>{slot.time}</Text>
+                            </View>
+                          </View>
+                          <View style={styles.pickerActionChip}>
+                            <Ionicons name="create-outline" size={13} color="#208AEF" />
+                            <Text style={styles.pickerActionText}>Edit Time</Text>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
                   </View>
-                  <View style={styles.pickerActionChip}>
-                    <Ionicons name="alarm-outline" size={13} color="#208AEF" />
-                    <Text style={styles.pickerActionText}>Custom Time</Text>
-                  </View>
-                </TouchableOpacity>
+                )}
               </View>
 
               {/* Schedule Duration: Start & End Dates Section */}
@@ -1937,11 +2098,19 @@ export default function MedsScreen() {
       {/* Interactive Time Picker Modal */}
       <TimePickerModal
         visible={isTimePickerOpen}
-        initialTime={customTime}
+        initialTime={dosesPerDay > 1 ? (dailySlots[activeSlotEditIndex]?.time || customTime) : customTime}
         onClose={() => setIsTimePickerOpen(false)}
         onSelectTime={(formattedTime, timeSlot) => {
-          setCustomTime(formattedTime);
-          setSelectedTimeSlot(timeSlot);
+          if (dosesPerDay > 1) {
+            setDailySlots((prev) => {
+              const next = [...prev];
+              next[activeSlotEditIndex] = { slot: timeSlot, time: formattedTime };
+              return next;
+            });
+          } else {
+            setCustomTime(formattedTime);
+            setSelectedTimeSlot(timeSlot);
+          }
         }}
       />
 

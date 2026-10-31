@@ -47,6 +47,14 @@ export class CreateMedicationDto {
   @IsOptional()
   timeSlot?: string;
 
+  @ApiPropertyOptional({
+    example: '[{"slot":"Morning","time":"08:00 AM"},{"slot":"Afternoon","time":"01:00 PM"},{"slot":"Night","time":"08:00 PM"}]',
+    description: 'JSON array of multiple daily dose times (e.g. 3 times a day: Morning, Noon, Night)',
+  })
+  @IsString()
+  @IsOptional()
+  times?: string;
+
   @ApiPropertyOptional({ example: 30, description: 'Current pills left in inventory' })
   @IsInt()
   @IsOptional()

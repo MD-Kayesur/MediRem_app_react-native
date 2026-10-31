@@ -39,6 +39,7 @@ export class MedicationsService {
         endDate: dto.endDate ?? 'Ongoing',
         time: dto.time ?? '08:00 AM',
         timeSlot: dto.timeSlot ?? 'Morning',
+        times: dto.times,
         pillsLeft: dto.pillsLeft ?? 30,
         totalPills: dto.totalPills ?? 30,
         imageUri: dto.imageUri,
@@ -65,9 +66,10 @@ export class MedicationsService {
     });
   }
 
-  async takeDose(id: string) {
+  async takeDose(id: string, scheduledTime?: string) {
     const med = await this.findOne(id);
     const updatedPills = Math.max(0, med.pillsLeft - 1);
+    const targetScheduledTime = scheduledTime || med.time;
 
     const [updatedMed, log] = await this.prisma.$transaction([
       this.prisma.medication.update({
@@ -77,7 +79,7 @@ export class MedicationsService {
       this.prisma.doseLog.create({
         data: {
           medicationId: id,
-          scheduledTime: med.time,
+          scheduledTime: targetScheduledTime,
           status: 'taken',
         },
       }),
@@ -86,7 +88,7 @@ export class MedicationsService {
     return {
       medication: updatedMed,
       doseLog: log,
-      message: `Dose of ${med.name} marked as taken. Remaining pills: ${updatedPills}`,
+      message: `Dose of ${med.name} at ${targetScheduledTime} marked as taken. Remaining pills: ${updatedPills}`,
     };
   }
 }

@@ -44,6 +44,7 @@ model Medication {
   endDate        String?
   time           String     @default("08:00 AM")
   timeSlot       String     @default("Morning")
+  times          String?    // JSON array of dose times: e.g. [{"slot":"Morning","time":"08:00 AM"},{"slot":"Afternoon","time":"01:00 PM"},{"slot":"Night","time":"08:00 PM"}]
   pillsLeft      Int        @default(30)
   totalPills     Int        @default(30)
   imageUri       String?

@@ -96,11 +96,11 @@ export class MedicationsController {
   @Post(':id/take-dose')
   @ApiOperation({
     summary: '⏱️ Take dose / Log intake',
-    description: 'Decrements pill inventory by 1, silences alarm, and records dose intake in DoseLog table.',
+    description: 'Decrements pill inventory by 1, silences alarm, and records dose intake in DoseLog table for specific scheduled time (e.g. Morning, Noon, Night).',
   })
   @ApiParam({ name: 'id', description: 'Medication UUID' })
   @ApiResponse({ status: 200, description: 'Dose logged and inventory decremented.' })
-  takeDose(@Param('id') id: string) {
-    return this.medicationsService.takeDose(id);
+  takeDose(@Param('id') id: string, @Body('scheduledTime') scheduledTime?: string) {
+    return this.medicationsService.takeDose(id, scheduledTime);
   }
 }

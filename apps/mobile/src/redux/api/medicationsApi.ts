@@ -48,16 +48,24 @@ export const medicationsApi = apiSlice.injectEndpoints({
       invalidatesTags: [{ type: 'Medications', id: 'LIST' }],
     }),
 
-    takeDose: builder.mutation<Medication, string>({
-      query: (id) => ({
-        url: `/medications/${id}/take-dose`,
-        method: 'POST',
-      }),
-      invalidatesTags: (result, error, id) => [
-        { type: 'Medications', id },
-        { type: 'Medications', id: 'LIST' },
-        'Doses',
-      ],
+    takeDose: builder.mutation<Medication, string | { id: string; scheduledTime?: string }>({
+      query: (arg) => {
+        const id = typeof arg === 'string' ? arg : arg.id;
+        const scheduledTime = typeof arg === 'string' ? undefined : arg.scheduledTime;
+        return {
+          url: `/medications/${id}/take-dose`,
+          method: 'POST',
+          body: scheduledTime ? { scheduledTime } : undefined,
+        };
+      },
+      invalidatesTags: (result, error, arg) => {
+        const id = typeof arg === 'string' ? arg : arg.id;
+        return [
+          { type: 'Medications', id },
+          { type: 'Medications', id: 'LIST' },
+          'Doses',
+        ];
+      },
     }),
 
     getDoseHistory: builder.query<any[], void>({

@@ -16,18 +16,86 @@ export interface RoutineStatusInfo {
   nextScheduledLabel?: string;
 }
 
+export interface DoseSlotInfo {
+  slot: 'Morning' | 'Afternoon' | 'Evening' | 'Night' | string;
+  time: string;
+}
+
 /**
- * Checks if a medication has already been taken today in Neon DB or local state
+ * Extracts all daily dose slots for a medication (e.g. 1, 2, 3 times a day)
  */
-export function isDoseTakenToday(med: any, localTakenKeys?: Set<string>): boolean {
+export function getMedicationDoseSlots(med: any): DoseSlotInfo[] {
+  if (!med) return [{ slot: 'Morning', time: '08:00 AM' }];
+
+  if (med.times) {
+    try {
+      const parsed = typeof med.times === 'string' ? JSON.parse(med.times) : med.times;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map((item: any) => {
+          if (typeof item === 'string') {
+            return {
+              slot: inferTimeSlot(item),
+              time: item,
+            };
+          }
+          return {
+            slot: item.slot || item.timeSlot || inferTimeSlot(item.time || '08:00 AM'),
+            time: item.time || '08:00 AM',
+          };
+        });
+      }
+    } catch {
+      // ignore JSON parse error, fall back below
+    }
+  }
+
+  return [{
+    slot: med.timeSlot || 'Morning',
+    time: med.time || '08:00 AM',
+  }];
+}
+
+export function inferTimeSlot(timeStr: string): string {
+  const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+  if (!match) return 'Morning';
+  let h = parseInt(match[1], 10);
+  const ampm = match[3].toUpperCase();
+  if (ampm === 'PM' && h < 12) h += 12;
+  if (ampm === 'AM' && h === 12) h = 0;
+
+  if (h >= 5 && h < 12) return 'Morning';
+  if (h >= 12 && h < 17) return 'Afternoon';
+  if (h >= 17 && h < 21) return 'Evening';
+  return 'Night';
+}
+
+/**
+ * Checks if a medication dose (optionally for a specific time) has already been taken today
+ */
+export function isDoseTakenToday(
+  med: any,
+  localTakenKeys?: Set<string>,
+  scheduledTime?: string
+): boolean {
   if (!med) return false;
 
   const todayStr = new Date().toDateString();
+  const timeToCheck = scheduledTime || med.time;
 
   // Check local dose keys
   if (localTakenKeys) {
-    const key = `${med.id}_${todayStr}_${med.time || 'default'}`;
-    if (localTakenKeys.has(key)) return true;
+    const keyWithTime = `${med.id}_${todayStr}_${timeToCheck}`;
+    const simpleKeyWithTime = `${med.id}_${timeToCheck}`;
+    const generalKey = `${med.id}_${todayStr}`;
+    const simpleId = med.id;
+
+    if (
+      localTakenKeys.has(keyWithTime) ||
+      localTakenKeys.has(simpleKeyWithTime) ||
+      (scheduledTime ? false : localTakenKeys.has(generalKey) || localTakenKeys.has(simpleId))
+    ) {
+      return true;
+    }
   }
 
   // Check database doseLogs
@@ -35,7 +103,11 @@ export function isDoseTakenToday(med: any, localTakenKeys?: Set<string>): boolea
     const hasTodayDbLog = med.doseLogs.some((log: any) => {
       if (log.status !== 'taken') return false;
       const logDate = new Date(log.takenAt || log.createdAt).toDateString();
-      return logDate === todayStr;
+      if (logDate !== todayStr) return false;
+      if (timeToCheck && log.scheduledTime) {
+        return log.scheduledTime.trim().toLowerCase() === timeToCheck.trim().toLowerCase();
+      }
+      return true;
     });
     if (hasTodayDbLog) return true;
   }
@@ -52,10 +124,11 @@ export function isDoseTakenToday(med: any, localTakenKeys?: Set<string>): boolea
 export function checkRoutineForToday(
   med: any,
   now: Date = new Date(),
-  localTakenKeys?: Set<string>
+  localTakenKeys?: Set<string>,
+  scheduledTime?: string
 ): RoutineStatusInfo {
   const pillsLeft = med.pillsLeft ?? 30;
-  const isTaken = isDoseTakenToday(med, localTakenKeys);
+  const isTaken = isDoseTakenToday(med, localTakenKeys, scheduledTime);
 
   // 1. Supply check: Out of stock (0 pills left)
   if (pillsLeft <= 0) {
