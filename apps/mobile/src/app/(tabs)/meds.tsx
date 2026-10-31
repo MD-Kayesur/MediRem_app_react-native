@@ -655,25 +655,6 @@ export default function MedsScreen() {
     setIsAlarmModalVisible(true);
   };
 
-  const handleTestAlarm = async () => {
-    const testMed: Medication = {
-      id: 'test-preview',
-      name: name.trim() || 'Scheduled Medicine',
-      dosage: dosage.trim() || '1 Dose',
-      instructions: instructions.trim() || 'As prescribed',
-      frequency: frequencyType === 'everyday' ? 'Every day' : 'Scheduled Routine',
-      time: customTime,
-      timeSlot: selectedTimeSlot,
-      nextDose: 'Right Now',
-      pillsLeft: parseInt(pillsCount, 10) || 30,
-      totalPills: parseInt(pillsCount, 10) || 30,
-      imageUri: imageUri || undefined,
-      status: 'active',
-      alarmEnabled: true,
-    };
-    handleTriggerMedAlarm(testMed);
-  };
-
   const handleTestCardAlarm = (med: Medication) => {
     handleTriggerMedAlarm(med);
   };
@@ -1994,55 +1975,6 @@ export default function MedsScreen() {
                     style={styles.presetChip}>
                     <Ionicons name="calendar-outline" size={11} color="#208AEF" />
                     <Text style={[styles.presetChipText, { color: '#208AEF' }]}>Custom</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Push Notification & Alarm Section */}
-              <View className="mb-4">
-                <Text className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                  Push Notification & Alarm
-                </Text>
-                <View style={styles.alarmControlCard}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                      <View
-                        className="w-10 h-10 rounded-xl items-center justify-center"
-                        style={[styles.pickerIconBox, { backgroundColor: alarmEnabled ? '#DCFCE7' : '#F1F5F9' }]}>
-                        <Ionicons
-                          name={alarmEnabled ? 'notifications' : 'notifications-off-outline'}
-                          size={19}
-                          color={alarmEnabled ? '#059669' : '#94A3B8'}
-                        />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.alarmTitle}>
-                          {alarmEnabled ? 'Medication Alarm Armed' : 'Alarm Disabled'}
-                        </Text>
-                        <Text style={styles.alarmSubtitle}>
-                          {alarmEnabled
-                            ? `Will alert with sound & vibration at ${customTime}`
-                            : 'No alarm or sound will trigger'}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Toggle Switch */}
-                    <TouchableOpacity
-                      onPress={() => setAlarmEnabled((prev) => !prev)}
-                      style={[styles.alarmToggle, alarmEnabled ? styles.alarmToggleOn : styles.alarmToggleOff]}
-                      activeOpacity={0.8}>
-                      <View style={[styles.alarmToggleThumb, alarmEnabled && styles.alarmToggleThumbOn]} />
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Immediate Test Button */}
-                  <TouchableOpacity
-                    onPress={handleTestAlarm}
-                    style={styles.testAlarmBtn}
-                    activeOpacity={0.75}>
-                    <Ionicons name="volume-high-outline" size={15} color="#208AEF" />
-                    <Text style={styles.testAlarmBtnText}>Test Alarm & Notification Now</Text>
                   </TouchableOpacity>
                 </View>
               </View>

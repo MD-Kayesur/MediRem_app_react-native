@@ -6,10 +6,74 @@ export const SNOOZE_REPEAT_DURATION_SEC = 180; // 3 minutes between repeating al
 export const SNOOZE_REPEAT_DURATION_MS = 180 * 1000;
 
 let audioPlayerInstance: any = null;
+let previewPlayerInstance: any = null;
+let activeSoundUrl = 'https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg';
 let isRinging = false;
 let autoStopTimer: any = null;
 let webAudioCtx: any = null;
 let webAudioInterval: any = null;
+
+export function setActiveSoundUrl(url: string) {
+  if (url && url !== activeSoundUrl) {
+    activeSoundUrl = url;
+    if (audioPlayerInstance) {
+      try {
+        if (typeof audioPlayerInstance.pause === 'function') {
+          audioPlayerInstance.pause();
+        }
+      } catch {
+        // safe fallback
+      }
+      audioPlayerInstance = null;
+    }
+  }
+}
+
+export function getActiveSoundUrl(): string {
+  return activeSoundUrl;
+}
+
+export async function previewRingtoneSound(soundUrl?: string): Promise<void> {
+  stopAudibleAlarm();
+  stopRingtonePreview();
+
+  const targetUrl = soundUrl || activeSoundUrl;
+
+  if (Platform.OS === 'web') {
+    startWebTone();
+  } else {
+    try {
+      await configureAudioMode();
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { createAudioPlayer } = require('expo-audio');
+      if (typeof createAudioPlayer === 'function') {
+        const player = createAudioPlayer(targetUrl);
+        player.volume = 1.0;
+        player.loop = false;
+        player.play();
+        previewPlayerInstance = player;
+      }
+    } catch (e) {
+      console.warn('[AlarmUtil] preview ringtone error:', e);
+    }
+  }
+}
+
+export function stopRingtonePreview(): void {
+  if (Platform.OS === 'web') {
+    stopWebTone();
+  }
+  if (previewPlayerInstance) {
+    try {
+      if (typeof previewPlayerInstance.pause === 'function') {
+        previewPlayerInstance.pause();
+      }
+    } catch {
+      // safe fallback
+    }
+    previewPlayerInstance = null;
+  }
+}
 
 type AlarmListener = (ringing: boolean) => void;
 const listeners = new Set<AlarmListener>();
@@ -61,9 +125,7 @@ function getNativeAudioPlayer() {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { createAudioPlayer } = require('expo-audio');
       if (typeof createAudioPlayer === 'function') {
-        audioPlayerInstance = createAudioPlayer(
-          'https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg'
-        );
+        audioPlayerInstance = createAudioPlayer(activeSoundUrl);
         audioPlayerInstance.loop = true;
         audioPlayerInstance.volume = 1.0;
       }

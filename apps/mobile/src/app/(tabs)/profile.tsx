@@ -21,8 +21,83 @@ import {
   useUpdateMeMutation,
   useGetAllUsersQuery,
   logout,
+  setActiveRingtone,
+  addCustomRingtone,
+  updateCustomRingtone,
+  deleteCustomRingtone,
+  setVibrationEnabled,
+  RingtoneItem,
 } from '@/redux';
 import { useAppSelector, useAppDispatch } from '@/redux/hooks';
+import {
+  previewRingtoneSound,
+  stopRingtonePreview,
+  setActiveSoundUrl,
+} from '@/utils/alarm';
+
+const TONE_PRESETS = [
+  {
+    id: 'preset-beeper',
+    name: 'Clinical Digital Beep',
+    subtitle: 'Clear electronic alarm pulses',
+    url: 'https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg',
+    category: 'beeper' as const,
+    icon: 'notifications',
+    color: '#208AEF',
+  },
+  {
+    id: 'preset-chime',
+    name: 'Morning Sunrise Chime',
+    subtitle: 'Gentle harmonic chime bells',
+    url: 'https://actions.google.com/sounds/v1/household/doorbell_chime.ogg',
+    category: 'chime' as const,
+    icon: 'sunny',
+    color: '#10B981',
+  },
+  {
+    id: 'preset-bell',
+    name: 'Cathedral Bell Toll',
+    subtitle: 'Deep resonance metallic ring',
+    url: 'https://actions.google.com/sounds/v1/alarms/mechanical_clock_ring.ogg',
+    category: 'bell' as const,
+    icon: 'notifications-circle',
+    color: '#8B5CF6',
+  },
+  {
+    id: 'preset-radar',
+    name: 'Urgent Radar Siren',
+    subtitle: 'Pulsed siren alert for critical meds',
+    url: 'https://actions.google.com/sounds/v1/emergency/siren_short.ogg',
+    category: 'radar' as const,
+    icon: 'warning',
+    color: '#EF4444',
+  },
+  {
+    id: 'preset-zen',
+    name: 'Zen Harmonic Bowl',
+    subtitle: 'Serene acoustic resonance',
+    url: 'https://actions.google.com/sounds/v1/household/clock_ticking.ogg',
+    category: 'zen' as const,
+    icon: 'flower',
+    color: '#F59E0B',
+  },
+  {
+    id: 'preset-pip',
+    name: 'Prompt Double Pip',
+    subtitle: 'Short discrete reminder pip',
+    url: 'https://actions.google.com/sounds/v1/alarms/beep_short.ogg',
+    category: 'beeper' as const,
+    icon: 'volume-medium',
+    color: '#06B6D4',
+  },
+];
+
+const VIBRATION_OPTIONS: { id: 'urgent' | 'standard' | 'gentle' | 'heartbeat'; label: string; desc: string }[] = [
+  { id: 'urgent', label: 'Urgent', desc: 'Fast, sharp pulses' },
+  { id: 'standard', label: 'Standard', desc: 'Balanced interval pulses' },
+  { id: 'gentle', label: 'Gentle', desc: 'Soft low vibration' },
+  { id: 'heartbeat', label: 'Heartbeat', desc: 'Double thump rhythm' },
+];
 
 export default function ProfileScreen() {
   const dispatch = useAppDispatch();
@@ -62,6 +137,138 @@ export default function ProfileScreen() {
 
   // Settings State
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+
+  // Redux Alarm & Ringtone State
+  const alarmSettings = useAppSelector((state) => state.alarmSettings);
+  const activeRingtoneId = alarmSettings?.activeRingtoneId || 'digital-pager';
+  const ringtonesList = alarmSettings?.ringtones || [];
+  const isVibrationActive = alarmSettings?.vibrationEnabled ?? true;
+
+  const currentRingtone =
+    ringtonesList.find((r) => r.id === activeRingtoneId) || ringtonesList[0];
+
+  // Sound Preview State
+  const [playingRingtoneId, setPlayingRingtoneId] = useState<string | null>(null);
+
+  const handleTogglePreview = async (soundUrl: string, ringtoneId: string) => {
+    if (playingRingtoneId === ringtoneId) {
+      stopRingtonePreview();
+      setPlayingRingtoneId(null);
+    } else {
+      setPlayingRingtoneId(ringtoneId);
+      await previewRingtoneSound(soundUrl);
+    }
+  };
+
+  // Ringtone Selection (Update Active Ringtone)
+  const handleSelectRingtone = (ringtone: RingtoneItem) => {
+    dispatch(setActiveRingtone(ringtone.id));
+    setActiveSoundUrl(ringtone.soundUrl);
+  };
+
+  // Custom Ringtone Modal (Create / Update CRUD)
+  const [isRingtoneModalVisible, setIsRingtoneModalVisible] = useState(false);
+  const [editingRingtoneId, setEditingRingtoneId] = useState<string | null>(null);
+  const [ringtoneFormName, setRingtoneFormName] = useState('');
+  const [ringtoneFormDesc, setRingtoneFormDesc] = useState('');
+  const [ringtoneFormToneUrl, setRingtoneFormToneUrl] = useState(TONE_PRESETS[0].url);
+  const [ringtoneFormCategory, setRingtoneFormCategory] = useState<'beeper' | 'chime' | 'bell' | 'radar' | 'zen'>('chime');
+  const [ringtoneFormVibration, setRingtoneFormVibration] = useState<'urgent' | 'standard' | 'gentle' | 'heartbeat'>('standard');
+
+  const openAddRingtoneModal = () => {
+    stopRingtonePreview();
+    setPlayingRingtoneId(null);
+    setEditingRingtoneId(null);
+    setRingtoneFormName('');
+    setRingtoneFormDesc('Personal medication alert tone');
+    setRingtoneFormToneUrl(TONE_PRESETS[1].url);
+    setRingtoneFormCategory('chime');
+    setRingtoneFormVibration('standard');
+    setIsRingtoneModalVisible(true);
+  };
+
+  const openEditRingtoneModal = (item: RingtoneItem) => {
+    stopRingtonePreview();
+    setPlayingRingtoneId(null);
+    setEditingRingtoneId(item.id);
+    setRingtoneFormName(item.name);
+    setRingtoneFormDesc(item.description);
+    setRingtoneFormToneUrl(item.soundUrl);
+    setRingtoneFormCategory((item.category as any) || 'chime');
+    setRingtoneFormVibration(item.vibrationPattern || 'standard');
+    setIsRingtoneModalVisible(true);
+  };
+
+  const handleSaveRingtone = () => {
+    if (!ringtoneFormName.trim()) {
+      Alert.alert('Required Name', 'Please give your custom ringtone a name.');
+      return;
+    }
+
+    const matchedPreset = TONE_PRESETS.find((p) => p.url === ringtoneFormToneUrl) || TONE_PRESETS[0];
+
+    if (editingRingtoneId) {
+      dispatch(
+        updateCustomRingtone({
+          id: editingRingtoneId,
+          data: {
+            name: ringtoneFormName.trim(),
+            description: ringtoneFormDesc.trim(),
+            soundUrl: ringtoneFormToneUrl,
+            category: ringtoneFormCategory,
+            icon: matchedPreset.icon,
+            color: matchedPreset.color,
+            vibrationPattern: ringtoneFormVibration,
+          },
+        })
+      );
+      if (activeRingtoneId === editingRingtoneId) {
+        setActiveSoundUrl(ringtoneFormToneUrl);
+      }
+      Alert.alert('Ringtone Updated! 🔔', `"${ringtoneFormName.trim()}" was updated successfully.`);
+    } else {
+      const newId = `custom-tone-${Date.now()}`;
+      const newRingtone: RingtoneItem = {
+        id: newId,
+        name: ringtoneFormName.trim(),
+        description: ringtoneFormDesc.trim() || 'Custom medication alarm ringtone',
+        soundUrl: ringtoneFormToneUrl,
+        category: ringtoneFormCategory,
+        icon: matchedPreset.icon,
+        color: matchedPreset.color,
+        vibrationPattern: ringtoneFormVibration,
+        isCustom: true,
+      };
+      dispatch(addCustomRingtone(newRingtone));
+      setActiveSoundUrl(newRingtone.soundUrl);
+      Alert.alert('Ringtone Created! 🎉', `"${newRingtone.name}" has been created and set as your active alarm tone!`);
+    }
+
+    stopRingtonePreview();
+    setPlayingRingtoneId(null);
+    setIsRingtoneModalVisible(false);
+  };
+
+  const handleDeleteRingtone = (item: RingtoneItem) => {
+    Alert.alert(
+      'Delete Ringtone',
+      `Are you sure you want to delete "${item.name}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            if (playingRingtoneId === item.id) {
+              stopRingtonePreview();
+              setPlayingRingtoneId(null);
+            }
+            dispatch(deleteCustomRingtone(item.id));
+          },
+        },
+      ]
+    );
+  };
 
   // Edit Profile Modal State
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
@@ -314,6 +521,190 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Section: Medication Alarms & Ringtones (Full CRUD Management) */}
+        <View style={styles.sectionHeaderRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.sectionHeaderTitle}>Alarms & Ringtones</Text>
+            <Text style={styles.sectionHeaderSub}>
+              Choose active alarm sound & manage custom tones
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.addRingtoneHeaderBtn}
+            onPress={openAddRingtoneModal}
+            activeOpacity={0.8}
+            accessibilityLabel="Add custom ringtone">
+            <Ionicons name="add" size={15} color="#FFFFFF" />
+            <Text style={styles.addRingtoneHeaderBtnText}>Add Tone</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Active Ringtone Quick Banner */}
+        <View style={styles.activeToneBanner}>
+          <View style={styles.activeToneLeft}>
+            <View style={[styles.activeToneIconBadge, { backgroundColor: currentRingtone.color + '20' }]}>
+              <Ionicons
+                name={(currentRingtone.icon as any) || 'notifications'}
+                size={22}
+                color={currentRingtone.color || '#208AEF'}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                <Text style={styles.activeToneTitle} numberOfLines={1}>
+                  {currentRingtone.name}
+                </Text>
+                <View style={styles.activeArmedBadge}>
+                  <Ionicons name="checkmark-circle" size={12} color="#15803D" />
+                  <Text style={styles.activeArmedText}>Active Tone</Text>
+                </View>
+              </View>
+              <Text style={styles.activeToneSub} numberOfLines={1}>
+                {currentRingtone.description}
+              </Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.previewActiveBtn,
+              playingRingtoneId === currentRingtone.id && styles.previewActiveBtnPlaying,
+            ]}
+            onPress={() => handleTogglePreview(currentRingtone.soundUrl, currentRingtone.id)}
+            activeOpacity={0.8}>
+            <Ionicons
+              name={playingRingtoneId === currentRingtone.id ? 'stop' : 'volume-high'}
+              size={16}
+              color={playingRingtoneId === currentRingtone.id ? '#EF4444' : '#208AEF'}
+            />
+            <Text
+              style={[
+                styles.previewActiveBtnText,
+                playingRingtoneId === currentRingtone.id && styles.previewActiveBtnTextPlaying,
+              ]}>
+              {playingRingtoneId === currentRingtone.id ? 'Stop' : 'Test Tone'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* List of Available Ringtones (CRUD READ / SELECT / UPDATE / DELETE) */}
+        <View style={styles.ringtonesCard}>
+          <View style={styles.ringtonesCardHeader}>
+            <Text style={styles.ringtonesCardHeaderTitle}>Available Ringtones ({ringtonesList.length})</Text>
+            <Text style={styles.ringtonesCardHeaderSub}>Tap any ringtone to select as alarm sound</Text>
+          </View>
+
+          {ringtonesList.map((ringtone, index) => {
+            const isCurrent = ringtone.id === activeRingtoneId;
+            const isPlayingThis = playingRingtoneId === ringtone.id;
+
+            return (
+              <View
+                key={ringtone.id}
+                style={[
+                  styles.ringtoneRow,
+                  isCurrent && styles.ringtoneRowActive,
+                  index < ringtonesList.length - 1 && styles.ringtoneRowBorder,
+                ]}>
+                {/* Radio / Selection Indicator */}
+                <TouchableOpacity
+                  style={styles.ringtoneSelectArea}
+                  onPress={() => handleSelectRingtone(ringtone)}
+                  activeOpacity={0.7}>
+                  <View style={[styles.radioCircle, isCurrent && styles.radioCircleActive]}>
+                    {isCurrent && <View style={styles.radioDot} />}
+                  </View>
+
+                  <View
+                    style={[
+                      styles.ringtoneIconBadge,
+                      { backgroundColor: ringtone.color + '18' },
+                    ]}>
+                    <Ionicons
+                      name={(ringtone.icon as any) || 'notifications'}
+                      size={18}
+                      color={ringtone.color || '#208AEF'}
+                    />
+                  </View>
+
+                  <View style={{ flex: 1, paddingRight: 6 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <Text
+                        style={[
+                          styles.ringtoneNameText,
+                          isCurrent && styles.ringtoneNameTextActive,
+                        ]}
+                        numberOfLines={1}>
+                        {ringtone.name}
+                      </Text>
+                      {ringtone.isCustom && (
+                        <View style={styles.customPill}>
+                          <Text style={styles.customPillText}>Custom</Text>
+                        </View>
+                      )}
+                      {isCurrent && (
+                        <View style={styles.activePill}>
+                          <Text style={styles.activePillText}>Active</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.ringtoneDescText} numberOfLines={1}>
+                      {ringtone.description}
+                    </Text>
+                    <View style={styles.vibrationTagRow}>
+                      <Ionicons name="phone-portrait-outline" size={11} color="#94A3B8" />
+                      <Text style={styles.vibrationTagText}>
+                        Vibration: {ringtone.vibrationPattern.toUpperCase()}
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+
+                {/* Actions: Preview, Edit, Delete */}
+                <View style={styles.ringtoneActionsRow}>
+                  {/* Preview Button */}
+                  <TouchableOpacity
+                    style={[
+                      styles.actionIconBtn,
+                      isPlayingThis && styles.actionIconBtnPlaying,
+                    ]}
+                    onPress={() => handleTogglePreview(ringtone.soundUrl, ringtone.id)}
+                    activeOpacity={0.7}
+                    accessibilityLabel="Preview sound">
+                    <Ionicons
+                      name={isPlayingThis ? 'stop' : 'play'}
+                      size={14}
+                      color={isPlayingThis ? '#EF4444' : '#208AEF'}
+                    />
+                  </TouchableOpacity>
+
+                  {/* Edit Custom Button */}
+                  {ringtone.isCustom && (
+                    <TouchableOpacity
+                      style={styles.actionIconBtn}
+                      onPress={() => openEditRingtoneModal(ringtone)}
+                      activeOpacity={0.7}
+                      accessibilityLabel="Edit ringtone">
+                      <Ionicons name="pencil" size={13} color="#64748B" />
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Delete Custom Button */}
+                  {ringtone.isCustom && (
+                    <TouchableOpacity
+                      style={[styles.actionIconBtn, { backgroundColor: '#FEE2E2' }]}
+                      onPress={() => handleDeleteRingtone(ringtone)}
+                      activeOpacity={0.7}
+                      accessibilityLabel="Delete ringtone">
+                      <Ionicons name="trash-outline" size={13} color="#EF4444" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            );
+          })}
+        </View>
+
         {/* Section: App Settings */}
         <Text style={styles.sectionHeader}>App Settings</Text>
         <View style={styles.menuGroup}>
@@ -329,6 +720,23 @@ export default function ProfileScreen() {
               onValueChange={setNotificationsEnabled}
               trackColor={{ false: '#CBD5E1', true: '#93C5FD' }}
               thumbColor={notificationsEnabled ? '#208AEF' : '#F1F5F9'}
+            />
+          </View>
+
+          <View style={styles.menuItem}>
+            <View style={styles.menuItemLeft}>
+              <View style={[styles.menuIcon, { backgroundColor: '#F3E8FF' }]}>
+                <Ionicons name="phone-portrait-outline" size={18} color="#9333EA" />
+              </View>
+              <Text style={styles.menuText}>Alarm Vibration</Text>
+            </View>
+            <Switch
+              value={isVibrationActive}
+              onValueChange={(val) => {
+                dispatch(setVibrationEnabled(val));
+              }}
+              trackColor={{ false: '#CBD5E1', true: '#93C5FD' }}
+              thumbColor={isVibrationActive ? '#208AEF' : '#F1F5F9'}
             />
           </View>
 
@@ -444,6 +852,193 @@ export default function ProfileScreen() {
                     <Ionicons name="checkmark" size={16} color="#FFFFFF" />
                   </>
                 )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* CUSTOM RINGTONE CREATE / EDIT MODAL (CRUD) */}
+      <Modal
+        visible={isRingtoneModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          stopRingtonePreview();
+          setIsRingtoneModalVisible(false);
+        }}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCardLarge}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={styles.modalRingtoneIconBox}>
+                  <Ionicons name="musical-notes" size={20} color="#208AEF" />
+                </View>
+                <Text style={styles.modalTitle}>
+                  {editingRingtoneId ? 'Edit Ringtone ✏️' : 'Add Custom Ringtone 🎵'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  stopRingtonePreview();
+                  setIsRingtoneModalVisible(false);
+                }}
+                style={styles.modalCloseBtn}>
+                <Ionicons name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 440 }}>
+              <Text style={styles.modalSub}>
+                Customize sound tone preset, name, and vibration pattern for your medication alarm alerts.
+              </Text>
+
+              {/* Name Input */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Ringtone Name</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="text-outline" size={18} color="#64748B" style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={styles.textInput}
+                    value={ringtoneFormName}
+                    onChangeText={setRingtoneFormName}
+                    placeholder="e.g. My Urgent Wakeup Chime"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+              </View>
+
+              {/* Description Input */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Short Note / Description</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="information-circle-outline" size={18} color="#64748B" style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={styles.textInput}
+                    value={ringtoneFormDesc}
+                    onChangeText={setRingtoneFormDesc}
+                    placeholder="e.g. For morning blood pressure pills"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+              </View>
+
+              {/* Sound Preset Picker */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Select Sound Tone Preset</Text>
+                <View style={styles.tonePresetsContainer}>
+                  {TONE_PRESETS.map((preset) => {
+                    const isSelected = ringtoneFormToneUrl === preset.url;
+                    const isPlayingPreset = playingRingtoneId === preset.id;
+
+                    return (
+                      <TouchableOpacity
+                        key={preset.id}
+                        style={[
+                          styles.presetCard,
+                          isSelected && styles.presetCardSelected,
+                        ]}
+                        onPress={() => {
+                          setRingtoneFormToneUrl(preset.url);
+                          setRingtoneFormCategory(preset.category);
+                        }}
+                        activeOpacity={0.75}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                          <View
+                            style={[
+                              styles.presetIconBadge,
+                              { backgroundColor: preset.color + '18' },
+                            ]}>
+                            <Ionicons
+                              name={(preset.icon as any) || 'notifications'}
+                              size={18}
+                              color={preset.color}
+                            />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text
+                              style={[
+                                styles.presetName,
+                                isSelected && styles.presetNameSelected,
+                              ]}>
+                              {preset.name}
+                            </Text>
+                            <Text style={styles.presetSub}>{preset.subtitle}</Text>
+                          </View>
+                        </View>
+
+                        {/* Test audio preview button */}
+                        <TouchableOpacity
+                          style={[
+                            styles.presetPreviewBtn,
+                            isPlayingPreset && styles.presetPreviewBtnPlaying,
+                          ]}
+                          onPress={() => handleTogglePreview(preset.url, preset.id)}
+                          activeOpacity={0.7}>
+                          <Ionicons
+                            name={isPlayingPreset ? 'stop' : 'play'}
+                            size={14}
+                            color={isPlayingPreset ? '#EF4444' : '#208AEF'}
+                          />
+                        </TouchableOpacity>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Vibration Pattern Picker */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Vibration Pattern</Text>
+                <View style={styles.vibrationChipsRow}>
+                  {VIBRATION_OPTIONS.map((opt) => {
+                    const isSelected = ringtoneFormVibration === opt.id;
+                    return (
+                      <TouchableOpacity
+                        key={opt.id}
+                        style={[
+                          styles.vibrationChip,
+                          isSelected && styles.vibrationChipSelected,
+                        ]}
+                        onPress={() => setRingtoneFormVibration(opt.id)}
+                        activeOpacity={0.75}>
+                        <Ionicons
+                          name="phone-portrait-outline"
+                          size={14}
+                          color={isSelected ? '#FFFFFF' : '#475569'}
+                        />
+                        <Text
+                          style={[
+                            styles.vibrationChipText,
+                            isSelected && styles.vibrationChipTextSelected,
+                          ]}>
+                          {opt.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalActionsRow}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => {
+                  stopRingtonePreview();
+                  setIsRingtoneModalVisible(false);
+                }}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.saveBtn}
+                onPress={handleSaveRingtone}
+                activeOpacity={0.8}>
+                <Text style={styles.saveBtnText}>
+                  {editingRingtoneId ? 'Save Changes' : 'Create Ringtone'}
+                </Text>
+                <Ionicons name="checkmark" size={16} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
           </View>
@@ -1180,5 +1775,353 @@ const styles = StyleSheet.create({
   adminUserMetaDivider: {
     fontSize: 11,
     color: '#CBD5E1',
+  },
+  // Alarm & Ringtone CRUD Styles
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    marginTop: 24,
+    marginBottom: 10,
+  },
+  sectionHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  sectionHeaderSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  addRingtoneHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#208AEF',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    shadowColor: '#208AEF',
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  addRingtoneHeaderBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  activeToneBanner: {
+    marginHorizontal: 20,
+    marginBottom: 12,
+    backgroundColor: '#F0F9FF',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#BAE6FD',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  activeToneLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  activeToneIconBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activeToneTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  activeArmedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 6,
+  },
+  activeArmedText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#15803D',
+  },
+  activeToneSub: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  previewActiveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  previewActiveBtnPlaying: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  previewActiveBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#208AEF',
+  },
+  previewActiveBtnTextPlaying: {
+    color: '#EF4444',
+  },
+  ringtonesCard: {
+    marginHorizontal: 20,
+    marginBottom: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  ringtonesCardHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#F8FAFC',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  ringtonesCardHeaderTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  ringtonesCardHeaderSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  ringtoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    backgroundColor: '#FFFFFF',
+  },
+  ringtoneRowActive: {
+    backgroundColor: '#F0F9FF',
+  },
+  ringtoneRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  ringtoneSelectArea: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  radioCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioCircleActive: {
+    borderColor: '#208AEF',
+  },
+  radioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#208AEF',
+  },
+  ringtoneIconBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ringtoneNameText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  ringtoneNameTextActive: {
+    color: '#0369A1',
+    fontWeight: '800',
+  },
+  customPill: {
+    backgroundColor: '#EDE9FE',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  customPillText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#7C3AED',
+  },
+  activePill: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  activePillText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#15803D',
+  },
+  ringtoneDescText: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  vibrationTagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginTop: 3,
+  },
+  vibrationTagText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#94A3B8',
+  },
+  ringtoneActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  actionIconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionIconBtnPlaying: {
+    backgroundColor: '#FEE2E2',
+  },
+  modalCardLarge: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 22,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalRingtoneIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#E0F2FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tonePresetsContainer: {
+    gap: 8,
+    marginTop: 4,
+  },
+  presetCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 10,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  presetCardSelected: {
+    borderColor: '#208AEF',
+    backgroundColor: '#EFF6FF',
+  },
+  presetIconBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  presetName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  presetNameSelected: {
+    color: '#0369A1',
+    fontWeight: '800',
+  },
+  presetSub: {
+    fontSize: 10,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  presetPreviewBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  presetPreviewBtnPlaying: {
+    backgroundColor: '#FEE2E2',
+    borderColor: '#FCA5A5',
+  },
+  vibrationChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 6,
+  },
+  vibrationChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  vibrationChipSelected: {
+    backgroundColor: '#208AEF',
+    borderColor: '#208AEF',
+  },
+  vibrationChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  vibrationChipTextSelected: {
+    color: '#FFFFFF',
   },
 });
