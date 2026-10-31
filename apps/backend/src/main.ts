@@ -57,6 +57,7 @@ async function bootstrap() {
   const port = process.env.PORT || 3000;
   await app.listen(port, '0.0.0.0');
   
+  logger.log(`✅ Database connected successfully! (Neon Cloud PostgreSQL)`);
   logger.log(`🚀 MediRem NestJS Backend running at http://0.0.0.0:${port}/api (accessible via localhost & LAN)`);
   logger.log(`📚 Swagger Documentation UI available at http://localhost:${port}/api/docs`);
   logger.log(`💊 Health check available at http://localhost:${port}/api/health`);
