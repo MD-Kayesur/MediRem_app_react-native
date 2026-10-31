@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "MediRem",
+    "slug": "MediRem",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./apps/mobile/assets/images/icon.png",
+    "scheme": "medirem",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./apps/mobile/assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "icon": "./apps/mobile/assets/images/icon.png"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff",
+        "foregroundImage": "./apps/mobile/assets/images/android-icon-foreground.png",
+        "backgroundImage": "./apps/mobile/assets/images/android-icon-background.png",
+        "monochromeImage": "./apps/mobile/assets/images/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "server",
+      "favicon": "./apps/mobile/assets/images/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "root": "./apps/mobile/src/app"
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./apps/mobile/assets/images/icon.png",
+          "color": "#208AEF"
+        }
+      ],
+      "expo-audio"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}

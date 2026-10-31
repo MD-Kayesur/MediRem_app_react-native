@@ -22,3 +22,4 @@ export class LogDoseDto {
   @IsOptional()
   note?: string;
 }
+

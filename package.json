@@ -2,6 +2,7 @@
   "name": "medirem-monorepo",
   "version": "1.0.0",
   "private": true,
+  "main": "expo-router/entry",
   "packageManager": "npm@10.9.3",
   "workspaces": [
     "apps/*",

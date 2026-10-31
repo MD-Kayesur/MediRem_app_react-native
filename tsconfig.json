@@ -1,0 +1,25 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": [
+        "./apps/mobile/src/*"
+      ],
+      "@/assets/*": [
+        "./apps/mobile/assets/*"
+      ],
+      "@medirem/types": [
+        "./packages/types/src/index.ts"
+      ]
+    }
+  },
+  "include": [
+    "apps/mobile/src/**/*.ts",
+    "apps/mobile/src/**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts",
+    "nativewind-env.d.ts"
+  ]
+}
