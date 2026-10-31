@@ -26,29 +26,6 @@ interface HistoryLog {
   note?: string;
 }
 
-const INITIAL_LOGS: HistoryLog[] = [
-  {
-    id: 'init_1',
-    medicationName: 'Paracetamol',
-    dosage: '500mg',
-    time: '8:12 AM',
-    status: 'taken',
-    rawDate: new Date().toISOString(),
-    dateStr: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
-    displayDate: 'Today, 8:12 AM',
-  },
-  {
-    id: 'init_2',
-    medicationName: 'Vitamin D3',
-    dosage: '1000IU',
-    time: '1:05 PM',
-    status: 'taken',
-    rawDate: new Date().toISOString(),
-    dateStr: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
-    displayDate: 'Today, 1:05 PM',
-  },
-];
-
 export default function HistoryScreen() {
   const user = useAppSelector(selectCurrentUser);
   const activeUserId = user?.id;
@@ -61,41 +38,43 @@ export default function HistoryScreen() {
     refetchOnMountOrArgChange: true,
   });
 
-  // Dynamically derive logs directly from Neon Cloud PostgreSQL
+  // Dynamically derive logs strictly scoped to active user from Neon Cloud PostgreSQL
   const logs: HistoryLog[] = useMemo(() => {
     if (dbLogs && dbLogs.length > 0) {
-      return dbLogs.map((item: any) => {
-        const rawDate = item.takenAt || item.createdAt || new Date().toISOString();
-        const dateObj = new Date(rawDate);
-        const dateStr = dateObj.toLocaleDateString('en-US', {
-          month: 'long',
-          day: 'numeric',
-          year: 'numeric',
+      return dbLogs
+        .filter((item: any) => !activeUserId || item.medication?.userId === activeUserId)
+        .map((item: any) => {
+          const rawDate = item.takenAt || item.createdAt || new Date().toISOString();
+          const dateObj = new Date(rawDate);
+          const dateStr = dateObj.toLocaleDateString('en-US', {
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric',
+          });
+          const isToday = new Date().toDateString() === dateObj.toDateString();
+          const timeStr =
+            item.scheduledTime ||
+            dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+          const displayDate = isToday
+            ? `Today, ${dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+            : `${dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} • ${timeStr}`;
+
+          return {
+            id: item.id,
+            medicationName: item.medication?.name || 'Medication',
+            dosage: item.medication?.dosage || '1 dose',
+            time: timeStr,
+            status: (item.status as any) || 'taken',
+            rawDate,
+            dateStr,
+            displayDate,
+            note: item.note,
+          };
         });
-        const isToday = new Date().toDateString() === dateObj.toDateString();
-        const timeStr =
-          item.scheduledTime ||
-          dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-        const displayDate = isToday
-          ? `Today, ${dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-          : `${dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} • ${timeStr}`;
-
-        return {
-          id: item.id,
-          medicationName: item.medication?.name || 'Medication',
-          dosage: item.medication?.dosage || '1 dose',
-          time: timeStr,
-          status: (item.status as any) || 'taken',
-          rawDate,
-          dateStr,
-          displayDate,
-          note: item.note,
-        };
-      });
     }
-    return INITIAL_LOGS;
-  }, [dbLogs]);
+    return []; // Never return mock logs or another user's logs
+  }, [dbLogs, activeUserId]);
 
   const [filter, setFilter] = useState<'all' | 'taken' | 'skipped'>('all');
   const [currentDateIndex, setCurrentDateIndex] = useState(0);

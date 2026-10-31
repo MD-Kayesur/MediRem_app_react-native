@@ -6,8 +6,17 @@ export class DosesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getHistory(limit = 50, userId?: string) {
+    if (!userId) {
+      // Strictly prevent cross-user data leakage: return empty array if no user is specified
+      return [];
+    }
+
     return this.prisma.doseLog.findMany({
-      where: userId ? { medication: { userId } } : {},
+      where: {
+        medication: {
+          userId,
+        },
+      },
       take: limit,
       orderBy: { takenAt: 'desc' },
       include: {
