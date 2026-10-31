@@ -1,7 +1,9 @@
 import { Controller, Get } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 
+@ApiTags('Health')
 @Controller('health')
 export class HealthController {
   constructor(
@@ -10,6 +12,11 @@ export class HealthController {
   ) {}
 
   @Get()
+  @ApiOperation({
+    summary: '🏥 System & Neon DB health check',
+    description: 'Verifies backend server uptime, Neon Cloud PostgreSQL connectivity, and Object Storage status.',
+  })
+  @ApiResponse({ status: 200, description: 'System health status and database latency.' })
   async check() {
     let dbStatus = 'disconnected';
     let dbLatencyMs = 0;
@@ -33,6 +40,17 @@ export class HealthController {
 
     const storageStatus = await this.storage.healthCheck();
 
-    return "backend is running";
+    return {
+      status: 'ok',
+      service: 'MediRem Backend',
+      timestamp: new Date().toISOString(),
+      database: {
+        provider: 'Neon Cloud PostgreSQL',
+        status: dbStatus,
+        latencyMs: dbLatencyMs,
+        counts,
+      },
+      storage: storageStatus,
+    };
   }
 }

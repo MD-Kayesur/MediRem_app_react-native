@@ -24,7 +24,7 @@ import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 
-@ApiTags('User Profile & Admin Management')
+@ApiTags('User')
 @ApiBearerAuth()
 @Controller('user')
 export class UserController {

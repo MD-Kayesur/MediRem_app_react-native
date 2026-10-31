@@ -26,19 +26,33 @@ async function bootstrap() {
     }),
   );
 
-  // 1. Build the Swagger configuration
+  // 1. Build the Swagger configuration with distinct sections
   const config = new DocumentBuilder()
-    .setTitle('MediRem API')
-    .setDescription('The MediRem Backend API documentation')
+    .setTitle('MediRem REST API')
+    .setDescription(
+      'Complete MediRem API documentation separated cleanly by domain sections: User, Auth, Medications, Doses, and Health.',
+    )
     .setVersion('1.0')
-    .addBearerAuth() // Adds authorization support (JWT tokens) to the UI
+    .addBearerAuth()
+    .addTag('User', 'User profile management, user retrieval, and administrative controls')
+    .addTag('Auth', 'Authentication, registration, 6-digit email verification, and password recovery')
+    .addTag('Medications', 'Medication schedules, dosages, pill inventory, and dose execution')
+    .addTag('Doses', 'Patient dose intake logging and adherence history')
+    .addTag('Health', 'System uptime, Neon Cloud PostgreSQL connectivity, and Object Storage status')
     .build();
 
   // 2. Create the document
   const document = SwaggerModule.createDocument(app, config);
 
   // 3. Setup the Swagger UI path (accessible at /api/docs)
-  SwaggerModule.setup('api/docs', app, document);
+  SwaggerModule.setup('api/docs', app, document, {
+    swaggerOptions: {
+      persistAuthorization: true,
+      displayRequestDuration: true,
+      docExpansion: 'list',
+    },
+    customSiteTitle: 'MediRem API Documentation',
+  });
 
   const port = process.env.PORT || 3000;
   await app.listen(port, '0.0.0.0');
