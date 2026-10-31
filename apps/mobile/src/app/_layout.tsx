@@ -10,7 +10,7 @@ import { Provider } from 'react-redux';
 import { store } from '@/redux';
 
 import { Colors } from '@/constants/theme';
-import { initializeNotificationService } from '@/services/notification-service';
+import { initializeNotificationService } from '@/utils/notifications';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 

@@ -11,8 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { triggerAudibleAlarm, stopAudibleAlarm } from '@/services/sound-service';
-import { subscribeToAuth, getCurrentUser } from '@/services/auth-service';
+import { triggerAudibleAlarm, stopAudibleAlarm } from '@/utils/alarm';
 import { useAppSelector } from '@/redux/hooks';
 import { selectCurrentUser } from '@/redux/slices/authSlice';
 
@@ -142,15 +141,9 @@ const INITIAL_DOSES: DoseItem[] = [
 ];
 
 export default function HomeScreen() {
-  const reduxUser = useAppSelector(selectCurrentUser);
-  const [localUser, setLocalUser] = useState(() => getCurrentUser());
-  const user = reduxUser || localUser;
+  const user = useAppSelector(selectCurrentUser);
   const [doses, setDoses] = useState<DoseItem[]>(INITIAL_DOSES);
   const [currentTime, setCurrentTime] = useState(() => new Date());
-
-  useEffect(() => {
-    return subscribeToAuth((u) => setLocalUser(u));
-  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => {

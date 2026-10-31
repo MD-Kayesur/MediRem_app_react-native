@@ -21,12 +21,12 @@ import {
 import {
   scheduleMedicationReminder,
   cancelMedicationReminder,
-} from '@/services/notification-service';
+} from '@/utils/notifications';
 import {
   triggerAudibleAlarm,
   stopAudibleAlarm,
   subscribeToAlarmState,
-} from '@/services/sound-service';
+} from '@/utils/alarm';
 
 interface Medication {
   id: string;

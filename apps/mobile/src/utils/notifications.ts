@@ -1,7 +1,15 @@
 import { Platform, Vibration, Alert } from 'react-native';
-import { triggerAudibleAlarm, stopAudibleAlarm } from './sound-service';
+import { triggerAudibleAlarm, stopAudibleAlarm } from './alarm';
 
 export const NOTIFICATION_CHANNEL_ID = 'medication-alarm-channel';
+
+export interface ScheduleReminderParams {
+  id: string;
+  name: string;
+  dosage: string;
+  timeStr: string;
+  instructions?: string;
+}
 
 // Safe lazy-loaded reference to expo-notifications
 let notificationsModule: typeof import('expo-notifications') | null = null;
@@ -36,7 +44,6 @@ export async function initializeNotificationService(): Promise<boolean> {
   try {
     const Notifications = getNotifications();
     if (!Notifications) {
-      // In Expo Go without full native push capabilities, in-app alerts and vibrations are used
       return true;
     }
 
@@ -65,22 +72,24 @@ export async function initializeNotificationService(): Promise<boolean> {
     }
 
     return finalStatus === 'granted';
-  } catch {
-    return true;
+  } catch (err) {
+    console.warn('[NotificationUtil] initialization error:', err);
+    return false;
   }
 }
 
 /**
- * Parse time string like "10:00 PM" into 24h hour and minute
+ * Parse time string (e.g. "08:00 AM", "14:30", "8:00 PM") into hour & minute
  */
-export function parseTimeString(timeStr?: string): { hour: number; minute: number } {
+export function parseAlarmTime(timeStr?: string): { hour: number; minute: number } {
   if (!timeStr) return { hour: 8, minute: 0 };
-  const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+
+  const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)?/i);
   if (!match) return { hour: 8, minute: 0 };
 
   let hour = parseInt(match[1], 10);
   const minute = parseInt(match[2], 10);
-  const ampm = match[3].toUpperCase();
+  const ampm = match[3]?.toUpperCase();
 
   if (ampm === 'PM' && hour < 12) hour += 12;
   if (ampm === 'AM' && hour === 12) hour = 0;
@@ -88,20 +97,12 @@ export function parseTimeString(timeStr?: string): { hour: number; minute: numbe
   return { hour, minute };
 }
 
-export interface ScheduleReminderParams {
-  id: string;
-  name: string;
-  dosage: string;
-  timeStr: string;
-  instructions?: string;
-}
-
 /**
  * Schedule a local notification / alarm for the medication dose
  */
 export async function scheduleMedicationReminder(params: ScheduleReminderParams): Promise<string | null> {
   const localId = `reminder_${params.id}_${Date.now()}`;
-  const { hour, minute } = parseTimeString(params.timeStr);
+  const { hour, minute } = parseAlarmTime(params.timeStr);
 
   const now = new Date();
   const scheduledDate = new Date();
@@ -142,22 +143,33 @@ export async function scheduleMedicationReminder(params: ScheduleReminderParams)
       return notificationId || localId;
     }
   } catch (error) {
-    console.warn('[NotificationService] Native scheduling warning:', error);
+    console.warn('[NotificationUtil] Native scheduling warning:', error);
   }
 
-  // Fallback: Return generated reminder id for in-app tracking
   return localId;
 }
 
 /**
- * Trigger an immediate test alarm and push notification so the user can hear and see it working
+ * Cancel a scheduled reminder
+ */
+export async function cancelMedicationReminder(notificationId: string): Promise<void> {
+  try {
+    const Notifications = getNotifications();
+    if (Notifications && notificationId) {
+      await Notifications.cancelScheduledNotificationAsync(notificationId);
+    }
+  } catch (err) {
+    console.warn('[NotificationUtil] Error cancelling notification:', err);
+  }
+}
+
+/**
+ * Trigger an immediate test alarm and push notification
  */
 export async function sendImmediateTestAlarm(name = 'Metformin', dosage = '500mg'): Promise<boolean> {
   try {
-    // 1. Trigger audible alarm chime sound and vibration immediately
-    triggerAudibleAlarm();
+    triggerAudibleAlarm(name);
 
-    // 2. Try native notification tray banner if supported
     const Notifications = getNotifications();
     if (Notifications) {
       try {
@@ -169,14 +181,13 @@ export async function sendImmediateTestAlarm(name = 'Metformin', dosage = '500mg
             badge: 1,
             data: { test: true },
           },
-          trigger: null, // trigger immediately
+          trigger: null,
         });
       } catch {
-        // Fall through to in-app alert
+        // Fall through
       }
     }
 
-    // 3. Guaranteed in-app alert dialog with audio chime, vibration, and stop controls
     Alert.alert(
       `🚨 Alarm Ringing: ${name} (${dosage})`,
       `Alarm sound and vibration are now active! Tap below to take dose or stop the alarm.`,
@@ -202,15 +213,63 @@ export async function sendImmediateTestAlarm(name = 'Metformin', dosage = '500mg
 }
 
 /**
- * Cancel a scheduled reminder
+ * Trigger an immediate in-app loud alarm with actions
  */
-export async function cancelMedicationReminder(notificationId: string): Promise<void> {
-  try {
-    const Notifications = getNotifications();
-    if (Notifications && notificationId) {
-      await Notifications.cancelScheduledNotificationAsync(notificationId);
-    }
-  } catch {
-    // Safe fallback
+export async function triggerImmediateDoseAlert(
+  medicationName: string,
+  dosage: string,
+  onTakeDose?: () => void,
+  onStopAlarm?: () => void
+): Promise<void> {
+  await triggerAudibleAlarm(medicationName);
+
+  Alert.alert(
+    `🔔 Alarm: ${medicationName}`,
+    `Dose scheduled: ${dosage}\n\n• The alarm will ring loudly for 60 seconds.\n• If ignored, it repeats automatically every 3 minutes.\n• Tapping 'Take Dose' logs your intake and silences the alarm for today.`,
+    [
+      {
+        text: 'Stop Alarm',
+        style: 'cancel',
+        onPress: () => {
+          stopAudibleAlarm();
+          if (onStopAlarm) onStopAlarm();
+        },
+      },
+      {
+        text: 'Take Dose ✅',
+        style: 'default',
+        onPress: () => {
+          stopAudibleAlarm();
+          if (onTakeDose) onTakeDose();
+        },
+      },
+    ],
+    { cancelable: false }
+  );
+}
+
+let repeatIntervalTimer: any = null;
+
+export function schedule3MinuteSnooze(
+  medicationName: string,
+  dosage: string,
+  onTakeDose?: () => void
+): void {
+  cancelSnoozeAlert();
+
+  repeatIntervalTimer = setTimeout(() => {
+    triggerImmediateDoseAlert(
+      medicationName,
+      dosage,
+      onTakeDose,
+      () => cancelSnoozeAlert()
+    );
+  }, 180 * 1000);
+}
+
+export function cancelSnoozeAlert(): void {
+  if (repeatIntervalTimer) {
+    clearTimeout(repeatIntervalTimer);
+    repeatIntervalTimer = null;
   }
 }

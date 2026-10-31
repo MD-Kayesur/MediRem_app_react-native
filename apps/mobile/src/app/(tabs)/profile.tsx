@@ -16,11 +16,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useGetMeQuery, useUpdateMeMutation } from '@/redux';
-import { useAppSelector } from '@/redux/hooks';
-import { signOut } from '@/services/auth-service';
+import { useGetMeQuery, useUpdateMeMutation, logout } from '@/redux';
+import { useAppSelector, useAppDispatch } from '@/redux/hooks';
 
 export default function ProfileScreen() {
+  const dispatch = useAppDispatch();
   const authStateUser = useAppSelector((state) => state.auth.user);
   const activeUserId = authStateUser?.id;
 
@@ -90,7 +90,7 @@ export default function ProfileScreen() {
         text: 'Log Out',
         style: 'destructive',
         onPress: () => {
-          signOut();
+          dispatch(logout());
           router.replace('/sign-in');
         },
       },
