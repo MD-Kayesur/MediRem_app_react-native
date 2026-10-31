@@ -18,6 +18,7 @@ import * as ImagePicker from 'expo-image-picker';
 import {
   CalendarPickerModal,
   TimePickerModal,
+  getExactCurrentTimeFormatted,
 } from '@/components/date-time-picker-modal';
 import {
   scheduleMedicationReminder,
@@ -501,7 +502,7 @@ export default function MedsScreen() {
   const [frequencyType, setFrequencyType] = useState<'everyday' | 'weekdays' | 'specific' | 'asneeded'>('everyday');
   const [selectedDays, setSelectedDays] = useState<string[]>(['Mon', 'Wed', 'Fri']);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<'Morning' | 'Afternoon' | 'Evening' | 'Night'>('Morning');
-  const [customTime, setCustomTime] = useState('08:00 AM');
+  const [customTime, setCustomTime] = useState(() => getExactCurrentTimeFormatted());
 
   // Multi-dose per day state (1x, 2x, 3x [Morning, Noon, Night], 4x)
   const [dosesPerDay, setDosesPerDay] = useState<1 | 2 | 3 | 4>(1);
@@ -764,17 +765,27 @@ export default function MedsScreen() {
     setImageUri(null);
     setFrequencyType('everyday');
     setSelectedDays(['Mon', 'Wed', 'Fri']);
-    setSelectedTimeSlot('Morning');
-    setCustomTime('08:00 AM');
+
+    // Default to EXACT current real-time & matching time slot
+    const currentTimeStr = getExactCurrentTimeFormatted();
+    const now = new Date();
+    const h24 = now.getHours();
+    let currentSlot: 'Morning' | 'Afternoon' | 'Evening' | 'Night' = 'Morning';
+    if (h24 >= 5 && h24 < 12) currentSlot = 'Morning';
+    else if (h24 >= 12 && h24 < 17) currentSlot = 'Afternoon';
+    else if (h24 >= 17 && h24 < 21) currentSlot = 'Evening';
+    else currentSlot = 'Night';
+
+    setSelectedTimeSlot(currentSlot);
+    setCustomTime(currentTimeStr);
     setDosesPerDay(1);
     setDailySlots([
-      { slot: 'Morning', time: '08:00 AM' },
+      { slot: currentSlot, time: currentTimeStr },
       { slot: 'Afternoon', time: '01:00 PM' },
       { slot: 'Night', time: '08:00 PM' },
       { slot: 'Evening', time: '06:00 PM' },
     ]);
     setActiveSlotEditIndex(0);
-    const now = new Date();
     setSelectedStartDate(now);
     setStartDateFormatted(`Today, ${formatDisplayDate(now)}`);
     setIsOngoing(true);

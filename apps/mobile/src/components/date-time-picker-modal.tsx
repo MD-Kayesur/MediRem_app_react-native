@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -221,17 +221,35 @@ export function CalendarPickerModal({
   );
 }
 
+export function getExactCurrentTimeParsed(): { h: number; m: string; period: 'AM' | 'PM' } {
+  const now = new Date();
+  let h = now.getHours();
+  const m = now.getMinutes().toString().padStart(2, '0');
+  const period: 'AM' | 'PM' = h >= 12 ? 'PM' : 'AM';
+  h = h % 12;
+  if (h === 0) h = 12;
+  return { h, m, period };
+}
+
+export function getExactCurrentTimeFormatted(): string {
+  const { h, m, period } = getExactCurrentTimeParsed();
+  return `${h.toString().padStart(2, '0')}:${m} ${period}`;
+}
+
 /**
  * Interactive Time Picker Modal to select Time & Slot
  */
 export function TimePickerModal({
   visible,
-  initialTime = '08:00 AM',
+  initialTime,
   onClose,
   onSelectTime,
 }: TimePickerProps) {
-  // Parse initial time string if present
-  const parseTime = (str: string) => {
+  // Parse initial time string if present, defaulting to EXACT current time
+  const parseTime = (str?: string) => {
+    if (!str || str.trim() === '' || str === '08:00 AM') {
+      return getExactCurrentTimeParsed();
+    }
     const parts = str.match(/(\d+):(\d+)\s*(AM|PM)/i);
     if (parts) {
       return {
@@ -240,7 +258,7 @@ export function TimePickerModal({
         period: (parts[3].toUpperCase() === 'PM' ? 'PM' : 'AM') as 'AM' | 'PM',
       };
     }
-    return { h: 8, m: '00', period: 'AM' as const };
+    return getExactCurrentTimeParsed();
   };
 
   const parsed = parseTime(initialTime);
@@ -248,6 +266,18 @@ export function TimePickerModal({
   const [selectedMinute, setSelectedMinute] = useState(parsed.m);
   const [period, setPeriod] = useState<'AM' | 'PM'>(parsed.period);
   const [prevInitialTime, setPrevInitialTime] = useState(initialTime);
+  const [prevVisible, setPrevVisible] = useState(visible);
+
+  // Sync to exact current time whenever the modal becomes visible if no explicit custom time was chosen
+  if (visible !== prevVisible) {
+    setPrevVisible(visible);
+    if (visible && (!initialTime || initialTime === '08:00 AM')) {
+      const now = getExactCurrentTimeParsed();
+      setSelectedHour(now.h);
+      setSelectedMinute(now.m);
+      setPeriod(now.period);
+    }
+  }
 
   if (initialTime !== prevInitialTime) {
     setPrevInitialTime(initialTime);
@@ -256,6 +286,13 @@ export function TimePickerModal({
     setSelectedMinute(p.m);
     setPeriod(p.period);
   }
+
+  const handleUseCurrentTime = () => {
+    const now = getExactCurrentTimeParsed();
+    setSelectedHour(now.h);
+    setSelectedMinute(now.m);
+    setPeriod(now.period);
+  };
 
   const calculateSlot = (hour: number, ampm: 'AM' | 'PM'): 'Morning' | 'Afternoon' | 'Evening' | 'Night' => {
     const h24 = ampm === 'PM' ? (hour === 12 ? 12 : hour + 12) : (hour === 12 ? 0 : hour);
@@ -279,6 +316,14 @@ export function TimePickerModal({
     setPeriod(p.period);
   };
 
+  // Ensure current minute is selectable in chips even if not a multiple of 5
+  const displayedMinutes = useMemo(() => {
+    if (selectedMinute && !MINUTES.includes(selectedMinute)) {
+      return [...MINUTES, selectedMinute].sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+    }
+    return MINUTES;
+  }, [selectedMinute]);
+
   return (
     <Modal visible={visible} animationType="fade" transparent>
       <View style={styles.modalBackdrop}>
@@ -296,8 +341,16 @@ export function TimePickerModal({
             </TouchableOpacity>
           </View>
 
-          {/* Quick Slot Buttons */}
+          {/* Quick Slot Buttons with Exact Current Time 'Now' Option */}
           <View style={styles.quickSlotRow}>
+            <TouchableOpacity
+              onPress={handleUseCurrentTime}
+              style={[styles.quickSlotBtn, styles.nowSlotBtn]}
+              activeOpacity={0.75}>
+              <Ionicons name="flash" size={14} color="#0284C7" />
+              <Text style={[styles.quickSlotText, styles.nowSlotText]}>Now</Text>
+            </TouchableOpacity>
+
             {QUICK_TIME_SLOTS.map((slotItem) => (
               <TouchableOpacity
                 key={slotItem.label}
@@ -309,7 +362,7 @@ export function TimePickerModal({
             ))}
           </View>
 
-          {/* Digital Time Preview */}
+          {/* Digital Time Preview (Shows Exact Real-Time) */}
           <View style={styles.digitalClockBox}>
             <View style={styles.digitalTimeDisplay}>
               <Text style={styles.clockDigitText}>
@@ -384,7 +437,7 @@ export function TimePickerModal({
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.scrollChipsContainer}>
-            {MINUTES.map((m) => {
+            {displayedMinutes.map((m) => {
               const isSelected = selectedMinute === m;
               return (
                 <TouchableOpacity
@@ -569,6 +622,14 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: '#334155',
+  },
+  nowSlotBtn: {
+    backgroundColor: '#E0F2FE',
+    borderColor: '#7DD3FC',
+  },
+  nowSlotText: {
+    color: '#0284C7',
+    fontWeight: '800',
   },
   digitalClockBox: {
     flexDirection: 'row',
