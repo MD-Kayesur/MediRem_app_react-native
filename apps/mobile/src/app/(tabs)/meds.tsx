@@ -626,6 +626,18 @@ export default function MedsScreen() {
     );
   };
 
+  // Dismiss / silence overdue alert for today without taking dose
+  const handleStopMedAlarmForToday = (med: Medication) => {
+    stopAudibleAlarm();
+    const doseKey = getDoseKey(med.id, med.time, currentTime);
+    setPermanentlyStoppedKeys((prev) => new Set(prev).add(doseKey));
+    if (activeAlarmMed?.id === med.id) {
+      setIsSnoozed3m(false);
+      setIsAlarmModalVisible(false);
+      setActiveAlarmMed(null);
+    }
+  };
+
   // Snooze for 3 minutes: will continuously ring again for 1 full minute in 3 mins
   const handleSnooze3Minutes = () => {
     stopAudibleAlarm();
@@ -1195,17 +1207,47 @@ export default function MedsScreen() {
                 <View style={styles.datesLeftGroup}>
                   <Ionicons name="calendar" size={12} color="#208AEF" />
                   <Text style={styles.datesDurationText}>
-                    {med.startDate || 'Started'} → {med.endDate || 'Ongoing'}
+                    {med.startDate || 'Started'}
+                    {med.endDate && !med.endDate.toLowerCase().includes('ongoing')
+                      ? ` → ${med.endDate}`
+                      : ' • Long-term Routine'}
                   </Text>
                 </View>
 
-                {med.alarmEnabled !== false ? (
+                {/* Dynamic Status Badge: logically reflects genuine medication & alarm state */}
+                {isDoneToday ? (
+                  <View style={styles.statusBadgeCompleted}>
+                    <Ionicons name="checkmark-circle" size={11} color="#059669" />
+                    <Text style={styles.statusBadgeCompletedText}>Done Today</Text>
+                  </View>
+                ) : isThisDoseRinging ? (
+                  <TouchableOpacity
+                    onPress={handleOpenAlarmModal}
+                    style={styles.statusBadgeRinging}
+                    activeOpacity={0.8}>
+                    <Ionicons name="volume-high" size={11} color="#DC2626" />
+                    <Text style={styles.statusBadgeRingingText}>Ringing Now</Text>
+                  </TouchableOpacity>
+                ) : isThisDoseSnoozed3m ? (
+                  <TouchableOpacity
+                    onPress={handleOpenAlarmModal}
+                    style={styles.statusBadgeSnoozed}
+                    activeOpacity={0.8}>
+                    <Ionicons name="time" size={11} color="#D97706" />
+                    <Text style={styles.statusBadgeSnoozedText}>Snoozed</Text>
+                  </TouchableOpacity>
+                ) : countdown.isLate ? (
+                  <View style={styles.statusBadgeOverdue}>
+                    <Ionicons name="alert-circle" size={11} color="#DC2626" />
+                    <Text style={styles.statusBadgeOverdueText}>Overdue</Text>
+                  </View>
+                ) : med.alarmEnabled !== false ? (
                   <TouchableOpacity
                     onPress={() => handleTestCardAlarm(med)}
-                    style={styles.cardAlarmPill}
+                    style={styles.statusBadgeScheduled}
                     activeOpacity={0.75}>
-                    <Ionicons name="notifications" size={11} color="#059669" />
-                    <Text style={styles.cardAlarmPillText}>Alarm Active</Text>
+                    <Ionicons name="notifications" size={11} color="#208AEF" />
+                    <Text style={styles.statusBadgeScheduledText}>Alarm Set</Text>
                   </TouchableOpacity>
                 ) : (
                   <View style={styles.cardAlarmMutedPill}>
@@ -1236,8 +1278,41 @@ export default function MedsScreen() {
                     </Text>
                   </View>
                 </View>
+              ) : countdown.isLate && !isThisDoseRinging && !isThisDoseSnoozed3m ? (
+                /* ACTIONABLE OVERDUE BANNER WITH DIRECT TAKE DOSE & DISMISS */
+                <View style={[styles.countdownBanner, styles.countdownBannerDue]}>
+                  <View style={styles.countdownLeftRow}>
+                    <Ionicons name="alert-circle" size={16} color="#EF4444" />
+                    <View style={{ flexShrink: 1 }}>
+                      <Text style={[styles.countdownLabel, styles.countdownLabelDue]}>
+                        ⚠️ Dose Overdue
+                      </Text>
+                      <Text style={styles.overdueDetailText}>
+                        Scheduled at {med.time} • {countdown.text} late
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.overdueActionButtons}>
+                    <TouchableOpacity
+                      onPress={() => handleTakeAlarmDosePermanent(med)}
+                      style={styles.overdueTakeButton}
+                      activeOpacity={0.8}>
+                      <Ionicons name="checkmark-circle" size={13} color="#FFFFFF" style={{ marginRight: 3 }} />
+                      <Text style={styles.overdueTakeButtonText}>Take Dose</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => handleStopMedAlarmForToday(med)}
+                      style={styles.overdueDismissButton}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Ionicons name="close-circle" size={18} color="#94A3B8" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
               ) : isThisDoseRinging || isThisDoseSnoozed3m || countdown.isDue ? (
-                /* RED DUE / LATE ALERT / RINGING / SNOOZE BANNER */
+                /* RED DUE / RINGING / SNOOZE BANNER */
                 <TouchableOpacity
                   onPress={handleOpenAlarmModal}
                   activeOpacity={0.8}
@@ -2808,6 +2883,110 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
     color: '#94A3B8',
+  },
+  statusBadgeCompleted: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  statusBadgeCompletedText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  statusBadgeRinging: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  statusBadgeRingingText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  statusBadgeSnoozed: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  statusBadgeSnoozedText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#D97706',
+  },
+  statusBadgeOverdue: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  statusBadgeOverdueText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  statusBadgeScheduled: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  statusBadgeScheduledText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#208AEF',
+  },
+  overdueDetailText: {
+    fontSize: 10,
+    color: '#991B1B',
+    fontWeight: '500',
+    marginTop: 1,
+  },
+  overdueActionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  overdueTakeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  overdueTakeButtonText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  overdueDismissButton: {
+    padding: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   pickerCardSub: {
     fontSize: 10,
