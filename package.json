@@ -27,6 +27,7 @@
     "prisma:studio": "npm --workspace=@medirem/backend run prisma:studio"
   },
   "devDependencies": {
+    "sharp": "^0.35.5",
     "turbo": "^2.4.4"
   },
   "dependencies": {
