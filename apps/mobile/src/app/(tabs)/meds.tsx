@@ -350,12 +350,15 @@ export default function MedsScreen() {
   const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set());
   const [createdMeds, setCreatedMeds] = useState<Medication[]>([]);
 
-  // Dynamically derive medications list directly from Neon database rows
+  // Dynamically derive medications list directly from Neon database rows (strictly deduplicated by ID)
   const meds: Medication[] = useMemo(() => {
     const sourceList = dbMeds && dbMeds.length > 0 ? dbMeds : INITIAL_MEDS;
-    const baseMeds = sourceList
+    const map = new Map<string, Medication>();
+
+    // 1. Add database medications first
+    sourceList
       .filter((m: any) => !deletedIds.has(m.id))
-      .map((m: any) => {
+      .forEach((m: any) => {
         let parsedDays = m.selectedDays;
         if (typeof m.selectedDays === 'string') {
           try {
@@ -367,7 +370,7 @@ export default function MedsScreen() {
         const override = localOverrides[m.id] || {};
         const pillsLeft = override.pillsLeft !== undefined ? override.pillsLeft : (m.pillsLeft ?? 30);
         const totalPills = override.totalPills !== undefined ? override.totalPills : (m.totalPills ?? 30);
-        return {
+        map.set(m.id, {
           id: m.id,
           name: m.name,
           dosage: m.dosage,
@@ -390,10 +393,19 @@ export default function MedsScreen() {
               ? `Refill Alert: Only ${pillsLeft} pills remaining!`
               : undefined,
           ...override,
-        };
+        });
       });
 
-    return [...createdMeds.filter((cm) => !deletedIds.has(cm.id)), ...baseMeds];
+    // 2. Merge any newly created local meds (if not already synced from DB query)
+    createdMeds
+      .filter((cm) => !deletedIds.has(cm.id))
+      .forEach((cm) => {
+        if (!map.has(cm.id)) {
+          map.set(cm.id, cm);
+        }
+      });
+
+    return Array.from(map.values());
   }, [dbMeds, localOverrides, deletedIds, createdMeds]);
 
   const [filter, setFilter] = useState<'all' | 'active' | 'paused'>('all');
@@ -1174,7 +1186,7 @@ export default function MedsScreen() {
             colors={['#208AEF']}
           />
         }>
-        {filteredMeds.map((med) => {
+        {filteredMeds.map((med, idx) => {
           const supplyPercent = Math.min(100, Math.round((med.pillsLeft / med.totalPills) * 100));
           const isPaused = med.status === 'paused';
           const doseKey = getDoseKey(med.id, med.time, currentTime);
@@ -1190,7 +1202,7 @@ export default function MedsScreen() {
 
           return (
             <View
-              key={med.id}
+              key={`${med.id}_${idx}`}
               className="p-4 rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-800/80 mb-3.5 shadow-sm"
               style={[styles.medCard, isPaused && styles.medCardPaused]}>
               {/* Header inside card */}

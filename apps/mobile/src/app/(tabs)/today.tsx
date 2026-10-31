@@ -160,13 +160,16 @@ export default function HomeScreen() {
   const [takenIds, setTakenIds] = useState<Set<string>>(() => new Set());
   const [currentTime, setCurrentTime] = useState(() => new Date());
 
-  // Dynamically derive today's dose cards directly from Neon database rows
+  // Dynamically derive today's dose cards directly from Neon database rows (strictly deduplicated by ID)
   const doses: DoseItem[] = useMemo(() => {
     const list = dbMeds && dbMeds.length > 0 ? dbMeds : INITIAL_DOSES;
-    return list.map((item: any) => {
+    const map = new Map<string, DoseItem>();
+
+    list.forEach((item: any) => {
       const id = item.id;
+      if (!id || map.has(id)) return;
       const isTaken = takenIds.has(id);
-      return {
+      map.set(id, {
         id,
         timeSlot: (item.timeSlot as any) || 'Morning',
         time: item.time || '08:00 AM',
@@ -174,8 +177,10 @@ export default function HomeScreen() {
         dosage: item.dosage,
         status: isTaken ? 'taken' : (item.status === 'taken' ? 'taken' : 'pending'),
         imageUri: item.imageUri || undefined,
-      };
+      });
     });
+
+    return Array.from(map.values());
   }, [dbMeds, takenIds]);
 
   useEffect(() => {
@@ -361,14 +366,14 @@ export default function HomeScreen() {
 
         {/* Dose List */}
         <View className="gap-3" style={styles.doseList}>
-          {doses.map((item) => {
+          {doses.map((item, idx) => {
             const isTaken = item.status === 'taken';
             const slotInfo = getSlotDetails(item.timeSlot);
             const countdown = getCountdownInfo(item.time, currentTime);
 
             return (
               <View
-                key={item.id}
+                key={`${item.id}_${idx}`}
                 className={`flex-row items-center justify-between p-4 rounded-2xl border ${
                   isTaken
                     ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50/20 dark:bg-slate-800/90'
