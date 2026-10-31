@@ -314,28 +314,6 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Section: Caregiver Sharing */}
-        <Text style={styles.sectionHeader}>Caregiver Sharing</Text>
-        <View style={styles.caregiverCard}>
-          <View style={styles.caregiverHeader}>
-            <View style={styles.caregiverLeft}>
-              <View style={styles.caregiverAvatar}>
-                <Ionicons name="people" size={20} color="#10B981" />
-              </View>
-              <View>
-                <Text style={styles.caregiverName}>Ayesha Rahman</Text>
-                <Text style={styles.caregiverPhone}>+880 1712 345678</Text>
-              </View>
-            </View>
-            <View style={styles.activeTag}>
-              <Text style={styles.activeTagText}>Active</Text>
-            </View>
-          </View>
-          <Text style={styles.caregiverDesc}>
-            Can view medication schedule and receive missed dose alerts with your consent.
-          </Text>
-        </View>
-
         {/* Section: App Settings */}
         <Text style={styles.sectionHeader}>App Settings</Text>
         <View style={styles.menuGroup}>
@@ -839,60 +817,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748B',
     marginTop: 1,
-  },
-  caregiverCard: {
-    padding: 16,
-    borderRadius: 18,
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
-    marginBottom: 20,
-  },
-  caregiverHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  caregiverLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  caregiverAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#DCFCE7',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  caregiverName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  caregiverPhone: {
-    fontSize: 12,
-    color: '#64748B',
-  },
-  activeTag: {
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-  },
-  activeTagText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#15803D',
-  },
-  caregiverDesc: {
-    fontSize: 12,
-    color: '#64748B',
-    lineHeight: 18,
   },
   brandingCard: {
     alignItems: 'center',
