@@ -33,24 +33,6 @@ export class HealthController {
 
     const storageStatus = await this.storage.healthCheck();
 
-    return {
-      status: 'ok',
-      service: 'MediRem API',
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      neonServices: {
-        postgres: {
-          status: dbStatus,
-          latencyMs: dbLatencyMs,
-          counts,
-          branch: process.env.NEON_BRANCH || 'production',
-        },
-        objectStorage: storageStatus,
-        realtime: {
-          url: process.env.NEON_REALTIME_URL || null,
-          configured: Boolean(process.env.NEON_REALTIME_SECRET),
-        },
-      },
-    };
+    return "backend is running";
   }
 }

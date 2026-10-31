@@ -11,6 +11,7 @@ import {
   Image,
   ActivityIndicator,
   Alert,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -44,6 +45,10 @@ export default function SignUpScreen() {
   const [verifyCode, setVerifyCode] = useState('');
   const [receivedCode, setReceivedCode] = useState<string | null>(null);
   const [resendCountdown, setResendCountdown] = useState(0);
+
+  // Success Modal State (shown after email code verification)
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successModalMessage, setSuccessModalMessage] = useState('');
 
   // UI state
   const loading = isSigningUp || isVerifying;
@@ -139,7 +144,7 @@ export default function SignUpScreen() {
     }
   };
 
-  // Handle 6-Digit Email Code Verification via Redux RTK Query -> Redirect to Login Page!
+  // Handle 6-Digit Email Code Verification via Redux RTK Query -> Show Success Modal!
   const handleVerifySignup = async (overrideCode?: string) => {
     setErrorMessage(null);
 
@@ -156,16 +161,10 @@ export default function SignUpScreen() {
         code: cleanCode,
       }).unwrap();
 
-      Alert.alert(
-        'Account Verified! 🎉',
-        result.message || 'Your MediRem account has been verified successfully!\n\nYou will now be redirected to the Sign In page.',
-        [
-          {
-            text: 'Sign In Now',
-            onPress: () => router.replace({ pathname: '/sign-in', params: { email: cleanEmail } }),
-          },
-        ]
+      setSuccessModalMessage(
+        result.message || 'Your MediRem account has been verified successfully!'
       );
+      setShowSuccessModal(true);
     } catch (err: any) {
       const msg =
         err?.data?.message ||
@@ -596,6 +595,54 @@ export default function SignUpScreen() {
           )}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* SUCCESS MODAL AFTER CODE VERIFICATION */}
+      <Modal
+        visible={showSuccessModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setShowSuccessModal(false);
+          router.replace({ pathname: '/sign-in', params: { email: email.trim().toLowerCase() } });
+        }}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalIconRing}>
+              <Ionicons name="checkmark-circle" size={60} color="#10B981" />
+            </View>
+
+            <Text style={styles.modalTitle}>Account Verified! 🎉</Text>
+
+            <Text style={styles.modalBody}>
+              {successModalMessage || 'Your account has been verified successfully!'}
+              {'\n\n'}
+              Welcome to MediRem, <Text style={styles.modalBoldText}>{name.trim() || 'User'}</Text>! Your email is verified and your account is active.
+            </Text>
+
+            <View style={styles.modalUserCard}>
+              <Ionicons name="mail-outline" size={18} color="#0284C7" />
+              <Text style={styles.modalUserCardEmail} numberOfLines={1}>
+                {email.trim().toLowerCase()}
+              </Text>
+              <View style={styles.modalVerifiedBadge}>
+                <Ionicons name="checkmark-done" size={12} color="#10B981" />
+                <Text style={styles.modalVerifiedBadgeText}>Verified</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.modalActionButton}
+              onPress={() => {
+                setShowSuccessModal(false);
+                router.replace({ pathname: '/sign-in', params: { email: email.trim().toLowerCase() } });
+              }}
+              activeOpacity={0.85}>
+              <Text style={styles.modalActionButtonText}>Proceed to Sign In</Text>
+              <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -938,5 +985,110 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#208AEF',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    paddingHorizontal: 24,
+    paddingTop: 28,
+    paddingBottom: 24,
+    alignItems: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  modalIconRing: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    borderWidth: 4,
+    borderColor: '#D1FAE5',
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#0F172A',
+    marginBottom: 10,
+    textAlign: 'center',
+    letterSpacing: -0.3,
+  },
+  modalBody: {
+    fontSize: 14,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 21,
+    marginBottom: 20,
+  },
+  modalBoldText: {
+    color: '#0F172A',
+    fontWeight: '700',
+  },
+  modalUserCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    width: '100%',
+    marginBottom: 22,
+  },
+  modalUserCardEmail: {
+    flex: 1,
+    fontSize: 13,
+    color: '#0369A1',
+    fontWeight: '600',
+  },
+  modalVerifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  modalVerifiedBadgeText: {
+    fontSize: 11,
+    color: '#065F46',
+    fontWeight: '700',
+  },
+  modalActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#208AEF',
+    width: '100%',
+    height: 52,
+    borderRadius: 14,
+    shadowColor: '#208AEF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  modalActionButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });
