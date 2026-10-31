@@ -93,13 +93,28 @@ export class UserController {
    */
   @Get()
   @ApiOperation({
-    summary: '👑 [Admin Only] Get all registered users',
+    summary: '👑 [Admin Only] Get all registered users (Admin Panel)',
     description:
-      'Permission: ⚠️ Administrator Role Only. Retrieves all registered users in the MediRem database for the admin panel.',
+      'Permission: ⚠️ Administrator Role Only. Restricted exclusively to administrators. Retrieves all registered users in the MediRem database for the admin panel.',
+  })
+  @ApiHeader({
+    name: 'x-user-id',
+    required: false,
+    description: 'Admin user UUID for authorization verification',
+  })
+  @ApiQuery({
+    name: 'adminUserId',
+    required: false,
+    description: 'Admin user UUID fallback for admin panel testing',
   })
   @ApiResponse({ status: 200, description: 'List of all registered users.' })
-  findAll() {
-    return this.userService.findAll();
+  @ApiResponse({ status: 403, description: 'Forbidden. Admin privileges required.' })
+  findAll(
+    @Headers('x-user-id') headerUserId?: string,
+    @Query('adminUserId') queryAdminUserId?: string,
+  ) {
+    const adminId = headerUserId || queryAdminUserId;
+    return this.userService.findAll(adminId);
   }
 
   /**

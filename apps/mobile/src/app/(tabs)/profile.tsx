@@ -16,7 +16,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useGetMeQuery, useUpdateMeMutation, logout } from '@/redux';
+import {
+  useGetMeQuery,
+  useUpdateMeMutation,
+  useGetAllUsersQuery,
+  logout,
+} from '@/redux';
 import { useAppSelector, useAppDispatch } from '@/redux/hooks';
 
 export default function ProfileScreen() {
@@ -43,6 +48,17 @@ export default function ProfileScreen() {
   const isAdmin = role === 'ADMIN';
   const isVerified = userProfile?.isVerified ?? true;
   const medicationsCount = userProfile?.medicationsCount ?? 0;
+
+  // Admin Panel: Get all registered users (Strictly for ADMIN role)
+  const [isAdminModalVisible, setIsAdminModalVisible] = useState(false);
+  const {
+    data: allUsersResponse,
+    isFetching: isFetchingAllUsers,
+    refetch: refetchAllUsers,
+  } = useGetAllUsersQuery(undefined, {
+    skip: !isAdmin,
+    refetchOnMountOrArgChange: true,
+  });
 
   // Settings State
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
@@ -232,6 +248,35 @@ export default function ProfileScreen() {
             <Text style={styles.statLabel}>Loud Alarm</Text>
           </View>
         </View>
+
+        {/* Section: Admin Panel (👑 Strictly for ADMIN Role) */}
+        {isAdmin && (
+          <View style={styles.adminCard}>
+            <View style={styles.adminCardHeader}>
+              <View style={styles.adminCardIconBox}>
+                <Ionicons name="shield-checkmark" size={22} color="#D97706" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                  <Text style={styles.adminCardTitle}>Admin Panel</Text>
+                  <View style={styles.adminOnlyTag}>
+                    <Text style={styles.adminOnlyTagText}>ADMIN ONLY</Text>
+                  </View>
+                </View>
+                <Text style={styles.adminCardSub}>
+                  {allUsersResponse?.total ?? 6} registered users in Neon PostgreSQL
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.adminViewBtn}
+                onPress={() => setIsAdminModalVisible(true)}
+                activeOpacity={0.8}>
+                <Text style={styles.adminViewBtnText}>View All</Text>
+                <Ionicons name="chevron-forward" size={14} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {/* Section: Account & Personal Information */}
         <Text style={styles.sectionHeader}>Account Details</Text>
@@ -425,6 +470,129 @@ export default function ProfileScreen() {
             </View>
           </View>
         </View>
+      </Modal>
+
+      {/* Admin Panel: Users Directory Modal (Strictly for ADMIN role) */}
+      <Modal
+        visible={isAdminModalVisible}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={() => setIsAdminModalVisible(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
+          {/* Modal Header */}
+          <View style={styles.adminModalHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={styles.adminModalIconBadge}>
+                <Ionicons name="shield-checkmark" size={20} color="#D97706" />
+              </View>
+              <View>
+                <Text style={styles.adminModalTitle}>Admin Panel • Users</Text>
+                <Text style={styles.adminModalSubtitle}>
+                  {allUsersResponse?.total ?? 0} registered database accounts
+                </Text>
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <TouchableOpacity
+                onPress={() => refetchAllUsers()}
+                style={styles.adminRefreshBtn}
+                activeOpacity={0.7}>
+                <Ionicons
+                  name="refresh"
+                  size={18}
+                  color="#208AEF"
+                  style={isFetchingAllUsers ? { opacity: 0.5 } : undefined}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setIsAdminModalVisible(false)}
+                style={styles.adminCloseBtn}
+                activeOpacity={0.7}>
+                <Ionicons name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* User List */}
+          <ScrollView
+            contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+            showsVerticalScrollIndicator={false}>
+            {isFetchingAllUsers && (!allUsersResponse || allUsersResponse.data.length === 0) ? (
+              <View style={{ padding: 40, alignItems: 'center' }}>
+                <ActivityIndicator size="large" color="#208AEF" />
+                <Text style={{ marginTop: 12, color: '#64748B', fontSize: 13 }}>
+                  Fetching users from Neon Cloud PostgreSQL...
+                </Text>
+              </View>
+            ) : (
+              (allUsersResponse?.data || []).map((u, idx) => {
+                const isUserAdmin = u.role === 'ADMIN';
+                return (
+                  <View key={u.id || idx} style={styles.adminUserCard}>
+                    <View style={styles.adminUserHeader}>
+                      <View style={styles.adminUserAvatar}>
+                        <Ionicons
+                          name={isUserAdmin ? 'shield-checkmark' : 'person'}
+                          size={18}
+                          color={isUserAdmin ? '#D97706' : '#208AEF'}
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={styles.adminUserName}>{u.name || 'Anonymous'}</Text>
+                          <View
+                            style={[
+                              styles.adminRolePill,
+                              isUserAdmin ? styles.adminRolePillGold : styles.adminRolePillBlue,
+                            ]}>
+                            <Text
+                              style={[
+                                styles.adminRolePillText,
+                                isUserAdmin
+                                  ? styles.adminRolePillTextGold
+                                  : styles.adminRolePillTextBlue,
+                              ]}>
+                              {u.role}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text style={styles.adminUserEmail}>{u.email}</Text>
+                      </View>
+
+                      <View
+                        style={[
+                          styles.verifyBadge,
+                          u.isVerified ? styles.verifyBadgeSuccess : styles.verifyBadgePending,
+                        ]}>
+                        <Text
+                          style={[
+                            styles.verifyBadgeText,
+                            u.isVerified ? styles.verifyTextSuccess : styles.verifyTextPending,
+                          ]}>
+                          {u.isVerified ? '✓ Verified' : 'Pending'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.adminUserMetaRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Ionicons name="medkit-outline" size={13} color="#64748B" />
+                        <Text style={styles.adminUserMetaText}>
+                          {u.medicationsCount ?? 0} medications
+                        </Text>
+                      </View>
+                      <Text style={styles.adminUserMetaDivider}>•</Text>
+                      <Text style={styles.adminUserMetaText}>
+                        ID: {u.id ? u.id.slice(0, 8) + '...' : 'N/A'}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })
+            )}
+          </ScrollView>
+        </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );
@@ -886,5 +1054,207 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  // Admin Card & Modal Styles
+  adminCard: {
+    backgroundColor: '#FFFBEB',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#FDE68A',
+    padding: 16,
+    marginBottom: 20,
+  },
+  adminCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  adminCardIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+  },
+  adminCardTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  adminOnlyTag: {
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  adminOnlyTagText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  adminCardSub: {
+    fontSize: 12,
+    color: '#B45309',
+    fontWeight: '500',
+  },
+  adminViewBtn: {
+    backgroundColor: '#D97706',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  adminViewBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  adminModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  adminModalIconBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adminModalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  adminModalSubtitle: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  adminRefreshBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adminCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adminUserCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  adminUserHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 8,
+  },
+  adminUserAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  adminUserName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  adminRolePill: {
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 6,
+  },
+  adminRolePillGold: {
+    backgroundColor: '#FEF3C7',
+  },
+  adminRolePillBlue: {
+    backgroundColor: '#E0F2FE',
+  },
+  adminRolePillText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  adminRolePillTextGold: {
+    color: '#B45309',
+  },
+  adminRolePillTextBlue: {
+    color: '#0369A1',
+  },
+  adminUserEmail: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  verifyBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  verifyBadgeSuccess: {
+    backgroundColor: '#DCFCE7',
+  },
+  verifyBadgePending: {
+    backgroundColor: '#FEF3C7',
+  },
+  verifyBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  verifyTextSuccess: {
+    color: '#15803D',
+  },
+  verifyTextPending: {
+    color: '#B45309',
+  },
+  adminUserMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  adminUserMetaText: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  adminUserMetaDivider: {
+    fontSize: 11,
+    color: '#CBD5E1',
   },
 });

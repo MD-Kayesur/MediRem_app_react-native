@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  ForbiddenException,
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
@@ -114,8 +115,25 @@ export class UserService {
 
   /**
    * [Admin Only] Retrieve all registered users
+   * Requires verified ADMIN privileges
    */
-  async findAll() {
+  async findAll(adminId?: string) {
+    if (!adminId) {
+      throw new ForbiddenException(
+        'Access Denied: Admin authorization required. Only administrators can access the all users directory.',
+      );
+    }
+
+    const requester = await this.prisma.user.findUnique({
+      where: { id: adminId },
+    });
+
+    if (!requester || requester.role !== 'ADMIN') {
+      throw new ForbiddenException(
+        'Access Denied: Only administrators have permission to access the admin panel user list.',
+      );
+    }
+
     const users = await this.prisma.user.findMany({
       orderBy: { createdAt: 'desc' },
       select: {
