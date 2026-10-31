@@ -13,6 +13,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { triggerAudibleAlarm, stopAudibleAlarm } from '@/utils/alarm';
+import {
+  checkRoutineForToday,
+} from '@/utils/routineSchedule';
 import { useAppSelector } from '@/redux/hooks';
 import { selectCurrentUser } from '@/redux/slices/authSlice';
 import { useGetMedicationsQuery, useTakeDoseMutation } from '@/redux';
@@ -25,6 +28,9 @@ interface DoseItem {
   dosage: string;
   status: 'taken' | 'pending';
   imageUri?: string;
+  isScheduledToday?: boolean;
+  isOutOfStock?: boolean;
+  pillsLeft?: number;
 }
 
 function getNextDoseTarget(timeStr?: string): Date {
@@ -161,6 +167,10 @@ export default function HomeScreen() {
   const [currentTime, setCurrentTime] = useState(() => new Date());
 
   // Dynamically derive today's dose cards directly from Neon database rows (strictly deduplicated by ID)
+  // Enforces:
+  // 1. Checks if taken today in Neon DB doseLogs or local intake -> marks status: 'taken'
+  // 2. Checks inventory (pillsLeft) -> marks out of stock
+  // 3. Checks schedule days of week & dates -> sets isScheduledToday
   const doses: DoseItem[] = useMemo(() => {
     const list = dbMeds && dbMeds.length > 0 ? dbMeds : INITIAL_DOSES;
     const map = new Map<string, DoseItem>();
@@ -168,20 +178,26 @@ export default function HomeScreen() {
     list.forEach((item: any) => {
       const id = item.id;
       if (!id || map.has(id)) return;
-      const isTaken = takenIds.has(id);
+
+      const routineCheck = checkRoutineForToday(item, currentTime);
+      const isTaken = routineCheck.isTakenToday || takenIds.has(id);
+
       map.set(id, {
         id,
         timeSlot: (item.timeSlot as any) || 'Morning',
         time: item.time || '08:00 AM',
         medicationName: item.name || item.medicationName,
         dosage: item.dosage,
-        status: isTaken ? 'taken' : (item.status === 'taken' ? 'taken' : 'pending'),
+        status: isTaken ? 'taken' : 'pending',
         imageUri: item.imageUri || undefined,
+        isScheduledToday: routineCheck.isScheduledToday,
+        isOutOfStock: routineCheck.isOutOfStock,
+        pillsLeft: routineCheck.pillsLeft,
       });
     });
 
     return Array.from(map.values());
-  }, [dbMeds, takenIds]);
+  }, [dbMeds, takenIds, currentTime]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -193,16 +209,27 @@ export default function HomeScreen() {
   const todayAlarmedRef = useRef<Set<string>>(new Set());
 
   // Automatic Due-Time Alarm Detection on Today screen
+  // Enforces:
+  // 1. If taken today -> STOP & DO NOT RING ALARM
+  // 2. If out of stock (pillsLeft <= 0) -> DO NOT RING ALARM
+  // 3. If not scheduled for today (e.g. weekend on weekday routine) -> DO NOT RING ALARM
   useEffect(() => {
     doses.forEach((item) => {
-      if (item.status !== 'taken') {
-        const info = getCountdownInfo(item.time, currentTime);
-        if (info.isDue) {
-          const key = `today_${item.id}_${currentTime.toDateString()}_${item.time}`;
-          if (!todayAlarmedRef.current.has(key)) {
-            todayAlarmedRef.current.add(key);
-            triggerAudibleAlarm();
-          }
+      // 1. If already taken today -> NEVER RING ALARM!
+      if (item.status === 'taken') return;
+
+      // 2. If zero pills left in inventory -> NEVER RING ALARM!
+      if (item.isOutOfStock || (item.pillsLeft !== undefined && item.pillsLeft <= 0)) return;
+
+      // 3. If not scheduled today based on day of week or dates -> NEVER RING ALARM!
+      if (item.isScheduledToday === false) return;
+
+      const info = getCountdownInfo(item.time, currentTime);
+      if (info.isDue) {
+        const key = `today_${item.id}_${currentTime.toDateString()}_${item.time}`;
+        if (!todayAlarmedRef.current.has(key)) {
+          todayAlarmedRef.current.add(key);
+          triggerAudibleAlarm();
         }
       }
     });
@@ -213,9 +240,9 @@ export default function HomeScreen() {
   const progressPercent = totalCount > 0 ? Math.round((takenCount / totalCount) * 100) : 0;
 
   const toggleDose = async (id: string) => {
-    // Stop ringing alarm if dose is taken
+    // 1. Immediately silence ringing audio alarm!
     stopAudibleAlarm();
-    const isCurrentlyTaken = takenIds.has(id);
+    const isCurrentlyTaken = takenIds.has(id) || doses.find((d) => d.id === id)?.status === 'taken';
 
     setTakenIds((prev) => {
       const next = new Set(prev);
@@ -227,6 +254,11 @@ export default function HomeScreen() {
       return next;
     });
 
+    // 2. Mark alarm key as silenced for today
+    const alarmKey = `today_${id}_${currentTime.toDateString()}`;
+    todayAlarmedRef.current.add(alarmKey);
+
+    // 3. Persist intake and decrement pill count in Neon Cloud PostgreSQL
     if (!isCurrentlyTaken) {
       try {
         await takeDoseMutation(id).unwrap();
@@ -449,13 +481,19 @@ export default function HomeScreen() {
                   className={`px-4 py-2 rounded-full min-w-[80px] items-center justify-center flex-row gap-1 ${
                     isTaken
                       ? 'bg-emerald-100 dark:bg-emerald-950/60'
+                      : item.isOutOfStock
+                      ? 'bg-rose-100 dark:bg-rose-950/60'
                       : 'bg-primary'
                   }`}
                   style={[
                     styles.actionBtn,
-                    isTaken ? styles.actionBtnTaken : styles.actionBtnPending,
+                    isTaken
+                      ? styles.actionBtnTaken
+                      : item.isOutOfStock
+                      ? { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5', borderWidth: 1 }
+                      : styles.actionBtnPending,
                   ]}
-                  onPress={() => toggleDose(item.id)}
+                  onPress={() => (item.isOutOfStock ? router.push('/(tabs)/meds') : toggleDose(item.id))}
                   activeOpacity={0.8}>
                   {isTaken ? (
                     <>
@@ -463,6 +501,11 @@ export default function HomeScreen() {
                       <Text className="text-emerald-700 dark:text-emerald-300 text-xs font-bold" style={styles.actionBtnTakenText}>
                         Taken
                       </Text>
+                    </>
+                  ) : item.isOutOfStock ? (
+                    <>
+                      <Ionicons name="alert-circle" size={14} color="#DC2626" />
+                      <Text className="text-rose-700 text-xs font-bold">Refill</Text>
                     </>
                   ) : (
                     <Text className="text-white text-xs font-bold" style={styles.actionBtnPendingText}>Take</Text>

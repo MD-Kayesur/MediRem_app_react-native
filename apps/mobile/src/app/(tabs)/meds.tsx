@@ -29,6 +29,9 @@ import {
   subscribeToAlarmState,
 } from '@/utils/alarm';
 import {
+  checkRoutineForToday,
+} from '@/utils/routineSchedule';
+import {
   useGetMedicationsQuery,
   useCreateMedicationMutation,
   useUpdateMedicationMutation,
@@ -481,15 +484,30 @@ export default function MedsScreen() {
   }, [activeAlarmMed, isAlarmPlaying, isSnoozed3m]);
 
   // Automatic Due-Time Alarm Detection: sounds chime and opens alarm when dose is due
+  // Enforces:
+  // 1. Never alarm if already taken today (in Neon DB or local state)
+  // 2. Never alarm if pillsLeft <= 0 (out of stock)
+  // 3. Never alarm if today is not a scheduled day of the week
+  // 4. Never alarm if outside start/end dates
   useEffect(() => {
     meds.forEach((med) => {
       if (med.status === 'active' && med.alarmEnabled !== false) {
+        const routineCheck = checkRoutineForToday(med, currentTime, takenDoseKeys);
+
+        // 1. If 0 pills left in inventory -> DO NOT ALARM
+        if (routineCheck.isOutOfStock) return;
+
+        // 2. If not scheduled for today -> DO NOT ALARM
+        if (!routineCheck.isScheduledToday) return;
+
+        // 3. If already taken today -> STOP & DO NOT ALARM FOR TODAY
+        if (routineCheck.isTakenToday) return;
+
         const doseKey = getDoseKey(med.id, med.time, currentTime);
-        const isDone = takenDoseKeys.has(doseKey) || permanentlyStoppedKeys.has(doseKey);
-        // If already taken or permanently stopped for today, NEVER ring again!
-        if (isDone) {
-          return;
-        }
+        if (permanentlyStoppedKeys.has(doseKey)) return;
+
+        // 4. "As needed" routines require manual trigger -> DO NOT AUTO-ALARM
+        if ((med.frequency || '').toLowerCase().includes('as needed')) return;
 
         const info = getCountdownInfo(med.time, currentTime, false, false);
         if (info.isDue) {
@@ -1190,12 +1208,13 @@ export default function MedsScreen() {
           const supplyPercent = Math.min(100, Math.round((med.pillsLeft / med.totalPills) * 100));
           const isPaused = med.status === 'paused';
           const doseKey = getDoseKey(med.id, med.time, currentTime);
-          const isTakenToday = takenDoseKeys.has(doseKey);
+          const routineCheck = checkRoutineForToday(med, currentTime, takenDoseKeys);
+          const isTakenToday = routineCheck.isTakenToday;
           const isThisDoseStoppedPermanent = permanentlyStoppedKeys.has(doseKey);
           const isDoneToday = isTakenToday || isThisDoseStoppedPermanent;
 
-          // When dose is completed today, getCountdownInfo targets tomorrow with isDue=false!
-          const countdown = getCountdownInfo(med.time, currentTime, isPaused, isDoneToday);
+          // When dose is completed today or not scheduled today, getCountdownInfo targets tomorrow with isDue=false!
+          const countdown = getCountdownInfo(med.time, currentTime, isPaused || !routineCheck.isScheduledToday, isDoneToday);
           const durationInfo = getRoutineDurationInfo(med.startDate, med.endDate);
           const isThisDoseRinging = isAlarmPlaying && activeAlarmMed?.id === med.id;
           const isThisDoseSnoozed3m = isSnoozed3m && activeAlarmMed?.id === med.id;
