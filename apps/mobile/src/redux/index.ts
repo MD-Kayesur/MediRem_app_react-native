@@ -23,5 +23,6 @@ export type AppDispatch = typeof store.dispatch;
 export * from './hooks';
 export * from './api/apiSlice';
 export * from './api/authApi';
+export * from './api/userApi';
 export * from './api/medicationsApi';
 export * from './slices/authSlice';

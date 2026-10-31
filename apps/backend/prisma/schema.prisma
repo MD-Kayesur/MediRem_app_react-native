@@ -10,18 +10,10 @@ datasource db {
 }
 
 // Enum for user roles
-enum Role{
+enum Role {
   ADMIN
   USER
 }
-
-model Role{
-  id        String   @id @default(uuid())
-  role      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
 
 model User {
   id                  String        @id @default(uuid())
@@ -30,6 +22,7 @@ model User {
   password            String?
   role                Role          @default(USER)
   phone               String?
+  avatarUrl           String?
   isVerified          Boolean       @default(false)
   verifyCode          String?       // 6-digit OTP code for signup verification
   verifyCodeExpiresAt DateTime?     // Expiration timestamp for signup OTP
@@ -43,7 +36,6 @@ model User {
 model Medication {
   id             String     @id @default(uuid())
   name           String
-  role           Role
   dosage         String
   instructions   String?
   frequency      String     @default("Every day")
@@ -67,7 +59,6 @@ model Medication {
 
 model DoseLog {
   id            String      @id @default(uuid())
-  role          Role
   medicationId  String
   medication    Medication  @relation(fields: [medicationId], references: [id], onDelete: Cascade)
   scheduledTime String
