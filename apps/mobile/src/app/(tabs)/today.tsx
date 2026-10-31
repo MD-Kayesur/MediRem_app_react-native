@@ -116,44 +116,6 @@ function getCountdownInfo(timeStr: string | undefined, now: Date): {
   };
 }
 
-const INITIAL_DOSES: DoseItem[] = [
-  {
-    id: 'init_1',
-    medicationId: '1',
-    timeSlot: 'Morning',
-    time: '08:00 AM',
-    medicationName: 'Paracetamol',
-    dosage: '500mg',
-    status: 'taken',
-  },
-  {
-    id: 'init_2',
-    medicationId: '2',
-    timeSlot: 'Afternoon',
-    time: '01:00 PM',
-    medicationName: 'Vitamin D3',
-    dosage: '1000IU',
-    status: 'pending',
-  },
-  {
-    id: 'init_3',
-    medicationId: '3',
-    timeSlot: 'Evening',
-    time: '07:00 PM',
-    medicationName: 'Metformin',
-    dosage: '500mg',
-    status: 'pending',
-  },
-  {
-    id: 'init_4',
-    medicationId: '4',
-    timeSlot: 'Night',
-    time: '10:00 PM',
-    medicationName: 'Atorvastatin',
-    dosage: '10mg',
-    status: 'pending',
-  },
-];
 
 export default function HomeScreen() {
   const user = useAppSelector(selectCurrentUser);
@@ -180,7 +142,7 @@ export default function HomeScreen() {
   // 3. Checks inventory (pillsLeft) -> marks out of stock
   // 4. Checks schedule days of week & dates -> sets isScheduledToday
   const doses: DoseItem[] = useMemo(() => {
-    const list = dbMeds && dbMeds.length > 0 ? dbMeds : INITIAL_DOSES;
+    const list = dbMeds || [];
     const items: DoseItem[] = [];
 
     list.forEach((item: any) => {

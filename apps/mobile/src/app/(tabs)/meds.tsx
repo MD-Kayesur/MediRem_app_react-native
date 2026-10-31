@@ -64,72 +64,6 @@ interface Medication {
   notificationId?: string;
 }
 
-const INITIAL_MEDS: Medication[] = [
-  {
-    id: '1',
-    name: 'Metformin',
-    dosage: '500mg',
-    instructions: 'After food',
-    frequency: 'Every day',
-    startDate: 'May 1, 2026',
-    endDate: 'Ongoing',
-    time: '01:00 PM',
-    timeSlot: 'Afternoon',
-    nextDose: 'Today, 1:00 PM',
-    pillsLeft: 18,
-    totalPills: 30,
-    status: 'active',
-    alarmEnabled: true,
-  },
-  {
-    id: '2',
-    name: 'Paracetamol',
-    dosage: '500mg',
-    instructions: 'With water',
-    frequency: 'As needed',
-    startDate: 'May 1, 2026',
-    endDate: 'Ongoing',
-    time: '08:00 AM',
-    timeSlot: 'Morning',
-    nextDose: 'Today, 08:00 AM',
-    pillsLeft: 24,
-    totalPills: 30,
-    status: 'active',
-    alarmEnabled: true,
-  },
-  {
-    id: '3',
-    name: 'Vitamin D3',
-    dosage: '1000IU',
-    instructions: 'With breakfast',
-    frequency: 'Daily',
-    startDate: 'Apr 15, 2026',
-    endDate: 'Ongoing',
-    time: '01:00 PM',
-    timeSlot: 'Afternoon',
-    nextDose: 'Today, 01:00 PM',
-    pillsLeft: 45,
-    totalPills: 60,
-    status: 'active',
-    alarmEnabled: true,
-  },
-  {
-    id: '4',
-    name: 'Atorvastatin',
-    dosage: '10mg',
-    instructions: 'Bedtime',
-    frequency: 'Every night',
-    startDate: 'Apr 20, 2026',
-    endDate: 'Ongoing',
-    time: '10:00 PM',
-    timeSlot: 'Night',
-    nextDose: 'Tonight, 10:00 PM',
-    pillsLeft: 12,
-    totalPills: 30,
-    status: 'active',
-    alarmEnabled: true,
-  },
-];
 
 const DAYS_OF_WEEK = [
   { label: 'Mon', key: 'Mon' },
@@ -358,7 +292,7 @@ export default function MedsScreen() {
 
   // Dynamically derive medications list directly from Neon database rows (strictly deduplicated by ID)
   const meds: Medication[] = useMemo(() => {
-    const sourceList = dbMeds && dbMeds.length > 0 ? dbMeds : INITIAL_MEDS;
+    const sourceList = dbMeds || [];
     const map = new Map<string, Medication>();
 
     // 1. Add database medications first
@@ -487,47 +421,74 @@ export default function MedsScreen() {
     return () => clearInterval(interval);
   }, [activeAlarmMed, isAlarmPlaying, isSnoozed3m]);
 
+  // Ref to track which doses have already auto-alarmed today (prevents infinite switching/re-alarming)
+  const todayAutoAlarmedRef = useRef<Set<string>>(new Set());
+
   // Automatic Due-Time Alarm Detection: sounds chime and opens alarm when dose is due
   // Enforces:
-  // 1. Never alarm if already taken today (in Neon DB or local state)
-  // 2. Never alarm if pillsLeft <= 0 (out of stock)
-  // 3. Never alarm if today is not a scheduled day of the week
-  // 4. Never alarm if outside start/end dates
+  // 1. If an alarm is already ringing or snoozed, NEVER OVERWRITE OR INTERRUPT IT
+  // 2. If user is in the middle of creating a medication, NEVER INTERRUPT
+  // 3. Never alarm if already taken today (in Neon DB or local state)
+  // 4. Never alarm if pillsLeft <= 0 (out of stock)
+  // 5. Never alarm if today is not a scheduled day of the week
+  // 6. Never alarm if outside start/end dates
+  // 7. Only alarm if the dose time arrived RIGHT NOW (within 2 minutes of the exact scheduled time)
   useEffect(() => {
-    meds.forEach((med) => {
-      if (med.status === 'active' && med.alarmEnabled !== false) {
-        const routineCheck = checkRoutineForToday(med, currentTime, takenDoseKeys);
+    // If an alarm is already active or snoozed, or modal is already visible, do not re-trigger
+    if (activeAlarmMed !== null || isAlarmModalVisible || isSnoozed3m) return;
 
-        // 1. If 0 pills left in inventory -> DO NOT ALARM
-        if (routineCheck.isOutOfStock) return;
+    // Do not pop up over the Add Medication modal
+    if (isAddModalOpen) return;
 
-        // 2. If not scheduled for today -> DO NOT ALARM
-        if (!routineCheck.isScheduledToday) return;
+    for (const med of meds) {
+      if (med.status !== 'active' || med.alarmEnabled === false) continue;
 
-        // 3. If already taken today -> STOP & DO NOT ALARM FOR TODAY
-        if (routineCheck.isTakenToday) return;
+      const routineCheck = checkRoutineForToday(med, currentTime, takenDoseKeys);
 
-        const doseKey = getDoseKey(med.id, med.time, currentTime);
-        if (permanentlyStoppedKeys.has(doseKey)) return;
+      // 1. If 0 pills left in inventory -> DO NOT ALARM
+      if (routineCheck.isOutOfStock) continue;
 
-        // 4. "As needed" routines require manual trigger -> DO NOT AUTO-ALARM
-        if ((med.frequency || '').toLowerCase().includes('as needed')) return;
+      // 2. If not scheduled for today -> DO NOT ALARM
+      if (!routineCheck.isScheduledToday) continue;
 
-        const info = getCountdownInfo(med.time, currentTime, false, false);
-        if (info.isDue) {
-          // If not currently tracking this dose, trigger 1-minute continuous alarm
-          if (activeAlarmMed?.id !== med.id) {
-            activeDoseKeyRef.current = doseKey;
-            setActiveAlarmMed(med);
-            setRingSecondsLeft(60);
-            setIsSnoozed3m(false);
-            setIsAlarmModalVisible(true);
-            triggerAudibleAlarm();
-          }
-        }
+      // 3. If already taken today -> STOP & DO NOT ALARM FOR TODAY
+      if (routineCheck.isTakenToday) continue;
+
+      const doseKey = getDoseKey(med.id, med.time, currentTime);
+      if (permanentlyStoppedKeys.has(doseKey)) continue;
+      if (todayAutoAlarmedRef.current.has(doseKey)) continue;
+
+      // 4. "As needed" routines require manual trigger -> DO NOT AUTO-ALARM
+      if ((med.frequency || '').toLowerCase().includes('as needed')) continue;
+
+      // 5. Only alarm if scheduled dose time arrived RIGHT NOW (within 2 minutes)
+      const target = getNextDoseTarget(med.time, false);
+      const diffMs = target.getTime() - currentTime.getTime();
+      const isDueRightNow = diffMs <= 0 && diffMs >= -120000;
+
+      if (isDueRightNow) {
+        todayAutoAlarmedRef.current.add(doseKey);
+        activeDoseKeyRef.current = doseKey;
+        setTimeout(() => {
+          setActiveAlarmMed(med);
+          setRingSecondsLeft(60);
+          setIsSnoozed3m(false);
+          setIsAlarmModalVisible(true);
+          triggerAudibleAlarm();
+        }, 0);
+        break; // Strictly break so only one medication alarms and stays fixed!
       }
-    });
-  }, [currentTime, meds, activeAlarmMed, takenDoseKeys, permanentlyStoppedKeys]);
+    }
+  }, [
+    currentTime,
+    meds,
+    activeAlarmMed,
+    isAlarmModalVisible,
+    isSnoozed3m,
+    isAddModalOpen,
+    takenDoseKeys,
+    permanentlyStoppedKeys,
+  ]);
 
   // New med form state
   const [name, setName] = useState('');
@@ -2179,13 +2140,15 @@ export default function MedsScreen() {
                       <MaterialCommunityIcons name="pill" size={32} color="#208AEF" />
                     </View>
                   )}
-                  <View style={{ flex: 1, marginLeft: 14 }}>
-                    <Text style={styles.alarmMedName}>{activeAlarmMed.name}</Text>
+                  <View style={{ flex: 1, marginLeft: 14, flexShrink: 1 }}>
+                    <Text style={styles.alarmMedName} numberOfLines={1} ellipsizeMode="tail">
+                      {activeAlarmMed.name}
+                    </Text>
                     <Text style={styles.alarmMedDosage}>{activeAlarmMed.dosage}</Text>
                     <Text style={styles.alarmMedMeta}>
                       {activeAlarmMed.time} • {activeAlarmMed.timeSlot}
                     </Text>
-                    <Text style={styles.alarmMedInstructions}>
+                    <Text style={styles.alarmMedInstructions} numberOfLines={3} ellipsizeMode="tail">
                       {activeAlarmMed.instructions || 'Take as prescribed'}
                     </Text>
                   </View>
@@ -3068,6 +3031,7 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     color: '#475569',
     marginTop: 2,
+    lineHeight: 16,
   },
   alarmPillBadge: {
     flexDirection: 'row',
