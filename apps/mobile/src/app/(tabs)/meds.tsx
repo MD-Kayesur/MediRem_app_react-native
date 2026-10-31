@@ -577,129 +577,6 @@ export default function MedsScreen() {
     }
   };
 
-  const handleTakePillDose = async (medId: string) => {
-    const med = meds.find((m) => m.id === medId);
-    if (!med) return;
-
-    const doseKey = getDoseKey(med.id, med.time, currentTime);
-
-    // If this med is ringing or snoozed, stop it immediately
-    if (activeAlarmMed?.id === medId) {
-      stopAudibleAlarm();
-      setIsAlarmModalVisible(false);
-      setActiveAlarmMed(null);
-      setIsSnoozed3m(false);
-    }
-
-    // Mark dose as taken and permanently stopped for today
-    setTakenDoseKeys((prev) => new Set(prev).add(doseKey));
-    setPermanentlyStoppedKeys((prev) => new Set(prev).add(doseKey));
-
-    // Save intake and decrement inventory in Neon Cloud PostgreSQL
-    try {
-      await takeDoseMutation(medId).unwrap();
-    } catch (e) {
-      console.warn('Take dose DB mutation note:', e);
-    }
-
-    setLocalOverrides((prev) => {
-      const current = prev[medId] || {};
-      const currentPills = current.pillsLeft !== undefined ? current.pillsLeft : med.pillsLeft;
-      const nextCount = Math.max(0, currentPills - 1);
-      return {
-        ...prev,
-        [medId]: {
-          ...current,
-          pillsLeft: nextCount,
-          refillWarning: nextCount <= 5 ? `Refill Alert: Only ${nextCount} pills remaining!` : undefined,
-        },
-      };
-    });
-
-    Alert.alert(
-      'Dose Taken! 💊',
-      `You marked ${med.name} (${med.dosage}) as taken for today.\n\n✓ Saved to Neon Cloud Database.\n✓ Inventory decremented.\n✓ DoseLog intake recorded.\n✓ Alarm stopped permanently.`
-    );
-  };
-
-  const handleAdjustPillCount = async (medId: string, delta: number) => {
-    const med = meds.find((m) => m.id === medId);
-    if (!med) return;
-
-    const nextCount = Math.max(0, med.pillsLeft + delta);
-    const nextTotal = Math.max(nextCount, med.totalPills);
-
-    setLocalOverrides((prev) => {
-      const current = prev[medId] || {};
-      return {
-        ...prev,
-        [medId]: {
-          ...current,
-          pillsLeft: nextCount,
-          totalPills: nextTotal,
-          refillWarning: nextCount <= 5 && nextCount > 0 ? `Refill Alert: Only ${nextCount} pills remaining!` : undefined,
-        },
-      };
-    });
-
-    try {
-      await updateMedication({
-        id: medId,
-        data: { pillsLeft: nextCount, totalPills: nextTotal },
-      }).unwrap();
-    } catch (e) {
-      console.warn('Update pills in Neon DB error:', e);
-    }
-  };
-
-  const handleRefillMed = async (medId: string) => {
-    const med = meds.find((m) => m.id === medId);
-    if (!med) return;
-
-    setLocalOverrides((prev) => ({
-      ...prev,
-      [medId]: {
-        pillsLeft: med.totalPills,
-        refillWarning: undefined,
-      },
-    }));
-
-    try {
-      await updateMedication({
-        id: medId,
-        data: { pillsLeft: med.totalPills },
-      }).unwrap();
-    } catch (e) {
-      console.warn('Refill in Neon DB error:', e);
-    }
-
-    Alert.alert('Supply Refilled! 💊', 'Pill supply reset to full capacity in Neon Cloud Database.');
-  };
-
-  const handleSyncToRoutine = async (medId: string, routineDays: number) => {
-    setLocalOverrides((prev) => ({
-      ...prev,
-      [medId]: {
-        pillsLeft: routineDays,
-        totalPills: routineDays,
-        refillWarning: undefined,
-      },
-    }));
-
-    try {
-      await updateMedication({
-        id: medId,
-        data: { pillsLeft: routineDays, totalPills: routineDays },
-      }).unwrap();
-    } catch (e) {
-      console.warn('Sync routine in Neon DB error:', e);
-    }
-
-    Alert.alert(
-      'Supply Synced to Routine! 💊',
-      `Supply updated to ${routineDays} pills in Neon Database to match your ${routineDays}-day routine perfectly.`
-    );
-  };
 
   // Start 1-minute continuous alarm ringing (for testing)
   const handleTriggerMedAlarm = (med: Medication) => {
@@ -723,7 +600,7 @@ export default function MedsScreen() {
   };
 
   // Permanently stop when taking the dose: will NEVER repeat after 3 minutes & removes red due alert
-  const handleTakeAlarmDosePermanent = (med: Medication) => {
+  const handleTakeAlarmDosePermanent = async (med: Medication) => {
     stopAudibleAlarm();
     const doseKey = activeDoseKeyRef.current || getDoseKey(med.id, med.time, currentTime);
     setTakenDoseKeys((prev) => new Set(prev).add(doseKey));
@@ -731,6 +608,13 @@ export default function MedsScreen() {
     setIsSnoozed3m(false);
     setIsAlarmModalVisible(false);
     setActiveAlarmMed(null);
+
+    // Save intake and decrement inventory in Neon Cloud PostgreSQL
+    try {
+      await takeDoseMutation(med.id).unwrap();
+    } catch (e) {
+      console.warn('Take dose DB call note:', e);
+    }
 
     setLocalOverrides((prev) => {
       const current = prev[med.id] || {};
@@ -747,7 +631,7 @@ export default function MedsScreen() {
     });
     Alert.alert(
       'Dose Recorded! 💊',
-      `You marked ${med.name} (${med.dosage}) as taken.\n\n✓ The red due alert is removed.\n✓ Alarm stopped permanently: will NOT repeat or alarm again today.\n✓ Next dose scheduled for tomorrow at ${med.time}.`
+      `You marked ${med.name} (${med.dosage}) as taken.\n\n✓ The red due alert is removed.\n✓ Saved to Neon Cloud Database.\n✓ Alarm stopped permanently: will NOT repeat or alarm again today.\n✓ Next dose scheduled for tomorrow at ${med.time}.`
     );
   };
 
@@ -1550,66 +1434,6 @@ export default function MedsScreen() {
                       </Text>
                     </View>
                   )}
-                </View>
-
-                {/* Direct Action Controls: Take Dose, Quick Stepper, Refill, and Sync */}
-                <View style={styles.supplyActionRow}>
-                  {/* Take Dose Quick Button */}
-                  <TouchableOpacity
-                    onPress={() => handleTakePillDose(med.id)}
-                    disabled={med.pillsLeft <= 0}
-                    style={[
-                      styles.takePillBtn,
-                      med.pillsLeft <= 0 && styles.takePillBtnDisabled,
-                    ]}
-                    activeOpacity={0.8}>
-                    <Ionicons name="checkmark-circle-outline" size={13} color="#FFFFFF" />
-                    <Text style={styles.takePillBtnText}>Take Dose (-1)</Text>
-                  </TouchableOpacity>
-
-                  {/* Stepper (- / +) */}
-                  <View style={styles.pillStepperBox}>
-                    <TouchableOpacity
-                      onPress={() => handleAdjustPillCount(med.id, -1)}
-                      disabled={med.pillsLeft <= 0}
-                      style={styles.stepperSubBtn}
-                      activeOpacity={0.7}>
-                      <Ionicons name="remove" size={12} color="#475569" />
-                    </TouchableOpacity>
-
-                    <Text style={styles.stepperNumber}>{med.pillsLeft}</Text>
-
-                    <TouchableOpacity
-                      onPress={() => handleAdjustPillCount(med.id, 1)}
-                      style={styles.stepperSubBtn}
-                      activeOpacity={0.7}>
-                      <Ionicons name="add" size={12} color="#475569" />
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Refill Button */}
-                  <TouchableOpacity
-                    onPress={() => handleRefillMed(med.id)}
-                    style={styles.pillRefillSmallBtn}
-                    activeOpacity={0.75}>
-                    <Ionicons name="refresh" size={11} color="#208AEF" />
-                    <Text style={styles.pillRefillSmallBtnText}>Refill</Text>
-                  </TouchableOpacity>
-
-                  {/* Quick Sync Button if pills don't match routine days */}
-                  {durationInfo.daysRemaining !== null &&
-                    durationInfo.daysRemaining > 0 &&
-                    med.pillsLeft !== durationInfo.daysRemaining && (
-                      <TouchableOpacity
-                        onPress={() => handleSyncToRoutine(med.id, durationInfo.daysRemaining!)}
-                        style={styles.syncRoutineBtn}
-                        activeOpacity={0.75}>
-                        <Ionicons name="sync-outline" size={11} color="#059669" />
-                        <Text style={styles.syncRoutineBtnText}>
-                          Sync to {durationInfo.daysRemaining}
-                        </Text>
-                      </TouchableOpacity>
-                    )}
                 </View>
               </View>
 
@@ -2623,91 +2447,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
     color: '#475569',
-  },
-  supplyActionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  takePillBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#208AEF',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
-    shadowColor: '#208AEF',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  takePillBtnDisabled: {
-    backgroundColor: '#94A3B8',
-    opacity: 0.5,
-  },
-  takePillBtnText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  pillStepperBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    overflow: 'hidden',
-  },
-  stepperSubBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepperNumber: {
-    minWidth: 24,
-    textAlign: 'center',
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#0F172A',
-    paddingHorizontal: 4,
-  },
-  pillRefillSmallBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 10,
-  },
-  pillRefillSmallBtnText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#208AEF',
-  },
-  syncRoutineBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#ECFDF5',
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 10,
-  },
-  syncRoutineBtnText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#059669',
   },
   pillPresetRow: {
     flexDirection: 'row',
