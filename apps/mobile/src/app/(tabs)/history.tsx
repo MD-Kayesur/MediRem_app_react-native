@@ -1,14 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { CalendarPickerModal } from '@/components/date-time-picker-modal';
+import { useGetDoseHistoryQuery } from '@/redux';
 
 interface HistoryLog {
   id: string;
@@ -50,18 +52,42 @@ const INITIAL_LOGS: HistoryLog[] = [
 ];
 
 export default function HistoryScreen() {
-  const [logs] = useState<HistoryLog[]>(INITIAL_LOGS);
+  const { data: dbLogs = [], isFetching, refetch } = useGetDoseHistoryQuery(undefined, {
+    refetchOnMountOrArgChange: true,
+  });
+
+  // Dynamically derive logs directly from Neon Cloud PostgreSQL
+  const logs: HistoryLog[] = useMemo(() => {
+    if (dbLogs && dbLogs.length > 0) {
+      return dbLogs.map((item: any) => ({
+        id: item.id,
+        medicationName: item.medication?.name || 'Medication',
+        dosage: item.medication?.dosage || '1 dose',
+        time: item.scheduledTime || (item.takenAt ? new Date(item.takenAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '08:00 AM'),
+        status: (item.status as any) || 'taken',
+      }));
+    }
+    return INITIAL_LOGS;
+  }, [dbLogs]);
+
   const [filter, setFilter] = useState<'all' | 'taken' | 'skipped' | 'pending'>('all');
   const [currentDateIndex, setCurrentDateIndex] = useState(0);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date(2025, 3, 26));
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
-  const [dates, setDates] = useState([
-    'April 26, 2025',
-    'April 25, 2025',
-    'April 24, 2025',
-    'April 23, 2025',
-  ]);
+  const [customDate, setCustomDate] = useState<string | null>(null);
+
+  const dates = useMemo(() => {
+    const list: string[] = [];
+    if (customDate) list.push(customDate);
+    for (let i = 0; i < 7; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const str = d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      if (!list.includes(str)) list.push(str);
+    }
+    return list;
+  }, [customDate]);
 
   const filteredLogs = logs.filter((log) => filter === 'all' || log.status === filter);
 
@@ -175,7 +201,17 @@ export default function HistoryScreen() {
       {/* History Log List */}
       <ScrollView
         contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isFetching}
+            onRefresh={() => {
+              refetch();
+            }}
+            tintColor="#208AEF"
+            colors={['#208AEF']}
+          />
+        }>
         <View className="gap-3" style={styles.logList}>
           {filteredLogs.map((log) => (
             <View
@@ -253,7 +289,7 @@ export default function HistoryScreen() {
         onClose={() => setIsCalendarOpen(false)}
         onSelectDate={(date, formatted) => {
           setSelectedDate(date);
-          setDates([formatted, ...dates]);
+          setCustomDate(formatted);
           setCurrentDateIndex(0);
         }}
       />

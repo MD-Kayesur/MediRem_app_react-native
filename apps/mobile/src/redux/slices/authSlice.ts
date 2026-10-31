@@ -13,9 +13,13 @@ export interface AuthState {
 }
 
 const initialState: AuthState = {
-  user: null,
+  user: {
+    id: '3a78c40e-9654-462b-b362-99bcc9516f5a',
+    name: 'MD Kayesur',
+    email: 'rmdkayesur@gmail.com',
+  },
   token: null,
-  isAuthenticated: false,
+  isAuthenticated: true,
   isGuest: false,
   pendingEmail: null,
   status: 'idle',

@@ -21,16 +21,38 @@ export class UserService {
    */
   async getMe(userId?: string) {
     if (!userId) {
-      // Find the primary verified user or the first user in DB as default
-      const defaultUser = await this.prisma.user.findFirst({
-        where: { isVerified: true },
-        orderBy: { createdAt: 'desc' },
+      // Find MD Kayesur first, then any verified user, then any user in Neon DB as default
+      let defaultUser = await this.prisma.user.findFirst({
+        where: { email: 'rmdkayesur@gmail.com' },
         include: {
           _count: {
             select: { medications: true },
           },
         },
       });
+
+      if (!defaultUser) {
+        defaultUser = await this.prisma.user.findFirst({
+          where: { isVerified: true },
+          orderBy: { createdAt: 'desc' },
+          include: {
+            _count: {
+              select: { medications: true },
+            },
+          },
+        });
+      }
+
+      if (!defaultUser) {
+        defaultUser = await this.prisma.user.findFirst({
+          orderBy: { createdAt: 'desc' },
+          include: {
+            _count: {
+              select: { medications: true },
+            },
+          },
+        });
+      }
 
       if (!defaultUser) {
         throw new NotFoundException('No active user profile found.');

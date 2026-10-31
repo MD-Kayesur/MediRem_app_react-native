@@ -59,6 +59,20 @@ export const medicationsApi = apiSlice.injectEndpoints({
         'Doses',
       ],
     }),
+
+    getDoseHistory: builder.query<any[], void>({
+      query: () => '/doses/history',
+      providesTags: ['Doses'],
+    }),
+
+    logDose: builder.mutation<any, { medicationId: string; scheduledTime: string; status?: string; note?: string }>({
+      query: (body) => ({
+        url: '/doses/log',
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['Doses'],
+    }),
   }),
 });
 
@@ -69,5 +83,7 @@ export const {
   useUpdateMedicationMutation,
   useDeleteMedicationMutation,
   useTakeDoseMutation,
+  useGetDoseHistoryQuery,
+  useLogDoseMutation,
 } = medicationsApi;
 
