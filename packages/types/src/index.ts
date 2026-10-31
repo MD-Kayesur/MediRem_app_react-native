@@ -8,17 +8,18 @@ export interface Medication {
   dosage: string;
   instructions?: string;
   frequency: string;
-  selectedDays?: string[];
+  selectedDays?: string[] | string;
   startDate?: string;
   endDate?: string;
   time: string;
-  timeSlot: 'Morning' | 'Afternoon' | 'Evening' | 'Night';
+  timeSlot: 'Morning' | 'Afternoon' | 'Evening' | 'Night' | string;
   pillsLeft: number;
   totalPills: number;
   imageUri?: string;
-  status: 'active' | 'paused';
+  status: 'active' | 'paused' | string;
   alarmEnabled: boolean;
   notificationId?: string;
+  userId?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -28,17 +29,18 @@ export interface CreateMedicationInput {
   dosage: string;
   instructions?: string;
   frequency?: string;
-  selectedDays?: string[];
+  selectedDays?: string[] | string;
   startDate?: string;
   endDate?: string;
   time?: string;
-  timeSlot?: 'Morning' | 'Afternoon' | 'Evening' | 'Night';
+  timeSlot?: 'Morning' | 'Afternoon' | 'Evening' | 'Night' | string;
   pillsLeft?: number;
   totalPills?: number;
   imageUri?: string;
-  status?: 'active' | 'paused';
+  status?: 'active' | 'paused' | string;
   alarmEnabled?: boolean;
   notificationId?: string;
+  userId?: string;
 }
 
 export interface UpdateMedicationInput extends Partial<CreateMedicationInput> {}

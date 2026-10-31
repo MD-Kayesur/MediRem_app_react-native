@@ -7,8 +7,9 @@ import { UpdateMedicationDto } from './dto/update-medication.dto';
 export class MedicationsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll() {
+  async findAll(userId?: string) {
     return this.prisma.medication.findMany({
+      where: userId ? { OR: [{ userId }, { userId: null }] } : {},
       orderBy: { createdAt: 'desc' },
       include: { doseLogs: true },
     });
@@ -25,7 +26,8 @@ export class MedicationsService {
     return med;
   }
 
-  async create(dto: CreateMedicationDto) {
+  async create(dto: CreateMedicationDto, headerUserId?: string) {
+    const finalUserId = dto.userId || headerUserId || undefined;
     return this.prisma.medication.create({
       data: {
         name: dto.name,
@@ -43,7 +45,7 @@ export class MedicationsService {
         status: dto.status ?? 'active',
         alarmEnabled: dto.alarmEnabled ?? true,
         notificationId: dto.notificationId,
-        userId: dto.userId,
+        userId: finalUserId,
       },
     });
   }

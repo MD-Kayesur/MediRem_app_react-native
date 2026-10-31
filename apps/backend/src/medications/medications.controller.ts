@@ -8,12 +8,16 @@ import {
   Delete,
   HttpCode,
   HttpStatus,
+  Query,
+  Headers,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiParam,
+  ApiQuery,
+  ApiHeader,
 } from '@nestjs/swagger';
 import { MedicationsService } from './medications.service';
 import { CreateMedicationDto } from './dto/create-medication.dto';
@@ -27,11 +31,17 @@ export class MedicationsController {
   @Get()
   @ApiOperation({
     summary: '💊 Get all medications',
-    description: 'Retrieves all user medications, schedules, and pill counts from Neon DB.',
+    description: 'Retrieves all user medications, schedules, and pill counts from Neon DB. Filterable by user.',
   })
+  @ApiQuery({ name: 'userId', required: false, description: 'Optional user UUID filter' })
+  @ApiHeader({ name: 'x-user-id', required: false, description: 'User UUID from client header' })
   @ApiResponse({ status: 200, description: 'List of medications.' })
-  findAll() {
-    return this.medicationsService.findAll();
+  findAll(
+    @Query('userId') queryUserId?: string,
+    @Headers('x-user-id') headerUserId?: string,
+  ) {
+    const userId = queryUserId || headerUserId;
+    return this.medicationsService.findAll(userId);
   }
 
   @Get(':id')
@@ -52,9 +62,13 @@ export class MedicationsController {
     summary: '➕ Create new medication',
     description: 'Adds a new medication schedule with dose times and inventory tracking to Neon DB.',
   })
+  @ApiHeader({ name: 'x-user-id', required: false, description: 'User UUID from client header' })
   @ApiResponse({ status: 201, description: 'Medication created successfully.' })
-  create(@Body() createMedicationDto: CreateMedicationDto) {
-    return this.medicationsService.create(createMedicationDto);
+  create(
+    @Body() createMedicationDto: CreateMedicationDto,
+    @Headers('x-user-id') headerUserId?: string,
+  ) {
+    return this.medicationsService.create(createMedicationDto, headerUserId);
   }
 
   @Patch(':id')

@@ -3,8 +3,8 @@ import { Medication, CreateMedicationInput, UpdateMedicationInput } from '@medir
 
 export const medicationsApi = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
-    getMedications: builder.query<Medication[], void>({
-      query: () => '/medications',
+    getMedications: builder.query<Medication[], string | void>({
+      query: (userId) => (userId ? `/medications?userId=${userId}` : '/medications'),
       providesTags: (result) =>
         result
           ? [

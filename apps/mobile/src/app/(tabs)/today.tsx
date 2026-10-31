@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Image,
   Alert,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -14,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { triggerAudibleAlarm, stopAudibleAlarm } from '@/utils/alarm';
 import { useAppSelector } from '@/redux/hooks';
 import { selectCurrentUser } from '@/redux/slices/authSlice';
+import { useGetMedicationsQuery, useTakeDoseMutation } from '@/redux';
 
 interface DoseItem {
   id: string;
@@ -142,8 +144,39 @@ const INITIAL_DOSES: DoseItem[] = [
 
 export default function HomeScreen() {
   const user = useAppSelector(selectCurrentUser);
-  const [doses, setDoses] = useState<DoseItem[]>(INITIAL_DOSES);
+  const activeUserId = user?.id;
+
+  // Real data from Neon Cloud PostgreSQL
+  const {
+    data: dbMeds = [],
+    isFetching: isMedsFetching,
+    refetch: refetchMeds,
+  } = useGetMedicationsQuery(activeUserId, {
+    refetchOnMountOrArgChange: true,
+  });
+
+  const [takeDoseMutation] = useTakeDoseMutation();
+
+  const [takenIds, setTakenIds] = useState<Set<string>>(() => new Set());
   const [currentTime, setCurrentTime] = useState(() => new Date());
+
+  // Dynamically derive today's dose cards directly from Neon database rows
+  const doses: DoseItem[] = useMemo(() => {
+    const list = dbMeds && dbMeds.length > 0 ? dbMeds : INITIAL_DOSES;
+    return list.map((item: any) => {
+      const id = item.id;
+      const isTaken = takenIds.has(id);
+      return {
+        id,
+        timeSlot: (item.timeSlot as any) || 'Morning',
+        time: item.time || '08:00 AM',
+        medicationName: item.name || item.medicationName,
+        dosage: item.dosage,
+        status: isTaken ? 'taken' : (item.status === 'taken' ? 'taken' : 'pending'),
+        imageUri: item.imageUri || undefined,
+      };
+    });
+  }, [dbMeds, takenIds]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -172,20 +205,30 @@ export default function HomeScreen() {
 
   const takenCount = doses.filter((d) => d.status === 'taken').length;
   const totalCount = doses.length;
-  const progressPercent = Math.round((takenCount / totalCount) * 100);
+  const progressPercent = totalCount > 0 ? Math.round((takenCount / totalCount) * 100) : 0;
 
-  const toggleDose = (id: string) => {
+  const toggleDose = async (id: string) => {
     // Stop ringing alarm if dose is taken
     stopAudibleAlarm();
-    setDoses((prev) =>
-      prev.map((dose) => {
-        if (dose.id === id) {
-          const nextStatus = dose.status === 'taken' ? 'pending' : 'taken';
-          return { ...dose, status: nextStatus };
-        }
-        return dose;
-      })
-    );
+    const isCurrentlyTaken = takenIds.has(id);
+
+    setTakenIds((prev) => {
+      const next = new Set(prev);
+      if (isCurrentlyTaken) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+
+    if (!isCurrentlyTaken) {
+      try {
+        await takeDoseMutation(id).unwrap();
+      } catch (e) {
+        console.warn('Take dose DB call error:', e);
+      }
+    }
   };
 
   const handleTestDoseAlarm = (item: DoseItem) => {
@@ -269,7 +312,17 @@ export default function HomeScreen() {
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isMedsFetching}
+            onRefresh={() => {
+              refetchMeds();
+            }}
+            tintColor="#208AEF"
+            colors={['#208AEF']}
+          />
+        }>
         {/* Today's Progress Card */}
         <View className="flex-row items-center p-4 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 my-3 gap-4" style={styles.progressCard}>
           <View className="items-center justify-center">

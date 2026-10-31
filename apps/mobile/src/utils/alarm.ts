@@ -208,3 +208,4 @@ export function stopAudibleAlarm(): void {
 export function isAlarmActive(): boolean {
   return isRinging;
 }
+
