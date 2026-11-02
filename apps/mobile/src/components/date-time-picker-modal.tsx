@@ -13,6 +13,8 @@ interface CalendarPickerProps {
   visible: boolean;
   initialDate?: Date;
   title?: string;
+  minDate?: Date;
+  maxDate?: Date;
   onClose: () => void;
   onSelectDate: (date: Date, formattedDate: string) => void;
 }
@@ -48,6 +50,8 @@ export function CalendarPickerModal({
   visible,
   initialDate = new Date(),
   title = 'Select Date',
+  minDate,
+  maxDate,
   onClose,
   onSelectDate,
 }: CalendarPickerProps) {
@@ -66,7 +70,35 @@ export function CalendarPickerModal({
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
   const firstDayIndex = new Date(currentYear, currentMonth, 1).getDay();
 
+  const isDateDisabled = (day: number) => {
+    const d = new Date(currentYear, currentMonth, day, 23, 59, 59);
+    if (minDate) {
+      const min = new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate(), 0, 0, 0);
+      if (d < min) return true;
+    }
+    if (maxDate) {
+      const max = new Date(maxDate.getFullYear(), maxDate.getMonth(), maxDate.getDate(), 23, 59, 59);
+      if (d > max) return true;
+    }
+    return false;
+  };
+
+  const canGoPrevMonth = useMemo(() => {
+    if (!minDate) return true;
+    const firstOfCurrentMonth = new Date(currentYear, currentMonth, 1);
+    const minMonthFirst = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+    return firstOfCurrentMonth > minMonthFirst;
+  }, [currentYear, currentMonth, minDate]);
+
+  const canGoNextMonth = useMemo(() => {
+    if (!maxDate) return true;
+    const lastOfCurrentMonth = new Date(currentYear, currentMonth + 1, 0);
+    const maxMonthLast = new Date(maxDate.getFullYear(), maxDate.getMonth() + 1, 0);
+    return lastOfCurrentMonth < maxMonthLast;
+  }, [currentYear, currentMonth, maxDate]);
+
   const handlePrevMonth = () => {
+    if (!canGoPrevMonth) return;
     if (currentMonth === 0) {
       setCurrentMonth(11);
       setCurrentYear(currentYear - 1);
@@ -76,6 +108,7 @@ export function CalendarPickerModal({
   };
 
   const handleNextMonth = () => {
+    if (!canGoNextMonth) return;
     if (currentMonth === 11) {
       setCurrentMonth(0);
       setCurrentYear(currentYear + 1);
@@ -155,13 +188,13 @@ export function CalendarPickerModal({
 
           {/* Month & Year Navigator */}
           <View style={styles.monthNavRow}>
-            <TouchableOpacity onPress={handlePrevMonth} style={styles.navArrowBtn}>
+            <TouchableOpacity onPress={handlePrevMonth} disabled={!canGoPrevMonth} style={[styles.navArrowBtn, !canGoPrevMonth && { opacity: 0.25 }]}>
               <Ionicons name="chevron-back" size={20} color="#0F172A" />
             </TouchableOpacity>
             <Text style={styles.monthLabel}>
               {MONTH_NAMES[currentMonth]} {currentYear}
             </Text>
-            <TouchableOpacity onPress={handleNextMonth} style={styles.navArrowBtn}>
+            <TouchableOpacity onPress={handleNextMonth} disabled={!canGoNextMonth} style={[styles.navArrowBtn, !canGoNextMonth && { opacity: 0.25 }]}>
               <Ionicons name="chevron-forward" size={20} color="#0F172A" />
             </TouchableOpacity>
           </View>
@@ -183,21 +216,25 @@ export function CalendarPickerModal({
               }
               const isSelected = day === selectedDay;
               const isToday = isCurrentMonth && day === today.getDate();
+              const disabled = isDateDisabled(day);
 
               return (
                 <TouchableOpacity
                   key={idx}
-                  onPress={() => handleSelectDay(day)}
+                  disabled={disabled}
+                  onPress={() => !disabled && handleSelectDay(day)}
                   style={[
                     styles.dayCell,
                     isSelected && styles.dayCellSelected,
                     isToday && !isSelected && styles.dayCellToday,
+                    disabled && { opacity: 0.25 },
                   ]}>
                   <Text
                     style={[
                       styles.dayText,
                       isSelected && styles.dayTextSelected,
                       isToday && !isSelected && styles.dayTextToday,
+                      disabled && { color: '#94A3B8' },
                     ]}>
                     {day}
                   </Text>

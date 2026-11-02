@@ -86,18 +86,61 @@ export default function HistoryScreen() {
   const [customDate, setCustomDate] = useState<string | null>(null);
   const [isAllDatesMode, setIsAllDatesMode] = useState(true);
 
-  // Available dates (last 7 calendar days + any custom picked date)
+  // User account creation date (normalized to midnight)
+  const userCreatedDate = useMemo(() => {
+    let createdDate: Date | null = null;
+    if (user?.createdAt) {
+      const parsed = new Date(user.createdAt);
+      if (!isNaN(parsed.getTime())) {
+        createdDate = parsed;
+      }
+    }
+    // Fallback: earliest log date if any logs exist
+    if (!createdDate && logs.length > 0) {
+      const timestamps = logs
+        .map((l) => new Date(l.rawDate).getTime())
+        .filter((t) => !isNaN(t));
+      if (timestamps.length > 0) {
+        createdDate = new Date(Math.min(...timestamps));
+      }
+    }
+    // Default fallback: today
+    if (!createdDate) {
+      createdDate = new Date();
+    }
+    return new Date(createdDate.getFullYear(), createdDate.getMonth(), createdDate.getDate());
+  }, [user, logs]);
+
+  // Available dates bounded by user account creation date up to today (new users cannot navigate before account creation)
   const dates = useMemo(() => {
+    const today = new Date();
+    const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+    // Difference in calendar days between account creation and today
+    const diffTime = todayMidnight.getTime() - userCreatedDate.getTime();
+    const daysSinceCreation = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+
+    // User can only see from their account creation day up to today (max 30 days)
+    const totalDays = Math.min(daysSinceCreation + 1, 30);
     const list: string[] = [];
-    if (customDate) list.push(customDate);
-    for (let i = 0; i < 7; i++) {
+
+    for (let i = 0; i < totalDays; i++) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      const str = d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      const str = d.toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      });
       if (!list.includes(str)) list.push(str);
     }
+
+    if (customDate && !list.includes(customDate)) {
+      list.push(customDate);
+    }
+
     return list;
-  }, [customDate]);
+  }, [userCreatedDate, customDate]);
 
   // Filter logs by status and optionally by selected date
   const filteredLogs = useMemo(() => {
@@ -116,16 +159,17 @@ export default function HistoryScreen() {
   const skippedCount = logs.filter((l) => l.status === 'skipped').length;
   const adherenceRate = totalRecordedCount > 0 ? Math.round((takenCount / totalRecordedCount) * 100) : 100;
 
+  const canGoBack = !isAllDatesMode && currentDateIndex < dates.length - 1;
+  const canGoForward = !isAllDatesMode && currentDateIndex > 0;
+
   const handlePrevDay = () => {
-    setIsAllDatesMode(false);
-    if (currentDateIndex < dates.length - 1) {
+    if (canGoBack) {
       setCurrentDateIndex(currentDateIndex + 1);
     }
   };
 
   const handleNextDay = () => {
-    setIsAllDatesMode(false);
-    if (currentDateIndex > 0) {
+    if (canGoForward) {
       setCurrentDateIndex(currentDateIndex - 1);
     }
   };
@@ -193,7 +237,10 @@ export default function HistoryScreen() {
           <TouchableOpacity
             onPress={handlePrevDay}
             className="p-1 rounded-full"
-            activeOpacity={0.7}>
+            disabled={!canGoBack}
+            style={{ opacity: canGoBack ? 1 : 0.25 }}
+            activeOpacity={0.7}
+            accessibilityLabel="Previous day">
             <Ionicons name="chevron-back" size={20} color={timeTheme.colors.textSecondary} />
           </TouchableOpacity>
 
@@ -203,16 +250,17 @@ export default function HistoryScreen() {
             activeOpacity={0.7}>
             <Ionicons name="calendar-outline" size={15} color="#208AEF" />
             <Text style={[styles.dateText, { color: timeTheme.colors.textPrimary }]}>
-              {isAllDatesMode ? 'All History Records' : dates[currentDateIndex]}
+              {isAllDatesMode ? 'All History Records' : (dates[currentDateIndex] || 'Today')}
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             onPress={handleNextDay}
             className="p-1 rounded-full"
-            disabled={isAllDatesMode || currentDateIndex === 0}
-            style={{ opacity: isAllDatesMode || currentDateIndex === 0 ? 0.3 : 1 }}
-            activeOpacity={0.7}>
+            disabled={!canGoForward}
+            style={{ opacity: canGoForward ? 1 : 0.25 }}
+            activeOpacity={0.7}
+            accessibilityLabel="Next day">
             <Ionicons name="chevron-forward" size={20} color={timeTheme.colors.textSecondary} />
           </TouchableOpacity>
         </View>
@@ -409,6 +457,8 @@ export default function HistoryScreen() {
       <CalendarPickerModal
         visible={isCalendarOpen}
         initialDate={selectedDate}
+        minDate={userCreatedDate}
+        maxDate={new Date()}
         onClose={() => setIsCalendarOpen(false)}
         onSelectDate={(date, formatted) => {
           setSelectedDate(date);

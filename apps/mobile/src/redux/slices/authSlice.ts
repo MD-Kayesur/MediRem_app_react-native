@@ -32,7 +32,10 @@ export const authSlice = createSlice({
       state,
       action: PayloadAction<{ user: AuthUser; token?: string }>,
     ) => {
-      state.user = action.payload.user;
+      state.user = {
+        ...action.payload.user,
+        createdAt: action.payload.user?.createdAt || new Date().toISOString(),
+      };
       state.token = action.payload.token || null;
       state.isAuthenticated = true;
       state.isGuest = false;
@@ -52,6 +55,7 @@ export const authSlice = createSlice({
         name: 'Guest User',
         email: 'guest@medirem.app',
         role: 'USER',
+        createdAt: new Date().toISOString(),
       };
       state.token = null;
       state.isAuthenticated = true;
