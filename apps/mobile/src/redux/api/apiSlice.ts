@@ -39,6 +39,10 @@ export const apiSlice = createApi({
       if (userId) {
         headers.set('x-user-id', userId);
       }
+      const userEmail = state?.auth?.user?.email;
+      if (userEmail) {
+        headers.set('x-user-email', userEmail);
+      }
       return headers;
     },
   }),

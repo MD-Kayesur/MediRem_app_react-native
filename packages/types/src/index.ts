@@ -21,6 +21,11 @@ export interface Medication {
   alarmEnabled: boolean;
   notificationId?: string;
   userId?: string;
+  user?: {
+    id: string;
+    email?: string | null;
+    name?: string | null;
+  };
   createdAt?: string;
   updatedAt?: string;
 }
@@ -43,6 +48,7 @@ export interface CreateMedicationInput {
   alarmEnabled?: boolean;
   notificationId?: string;
   userId?: string;
+  userEmail?: string;
 }
 
 export interface UpdateMedicationInput extends Partial<CreateMedicationInput> {}

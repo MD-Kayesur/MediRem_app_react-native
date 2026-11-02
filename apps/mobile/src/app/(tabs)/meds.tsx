@@ -63,6 +63,8 @@ interface Medication {
   status: 'active' | 'paused';
   alarmEnabled?: boolean;
   notificationId?: string;
+  userId?: string;
+  userEmail?: string;
 }
 
 
@@ -298,7 +300,7 @@ export default function MedsScreen() {
 
     // 1. Add database medications first
     sourceList
-      .filter((m: any) => !deletedIds.has(m.id))
+      .filter((m: any) => (!activeUserId || m.userId === activeUserId) && !deletedIds.has(m.id))
       .forEach((m: any) => {
         let parsedDays = m.selectedDays;
         if (typeof m.selectedDays === 'string') {
@@ -330,6 +332,7 @@ export default function MedsScreen() {
           status: (override.status as any) || (m.status as any) || 'active',
           alarmEnabled: m.alarmEnabled ?? true,
           notificationId: m.notificationId || undefined,
+          userId: m.userId,
           refillWarning:
             pillsLeft <= 5 && pillsLeft > 0
               ? `Refill Alert: Only ${pillsLeft} pills remaining!`
@@ -338,9 +341,9 @@ export default function MedsScreen() {
         });
       });
 
-    // 2. Merge any newly created local meds (if not already synced from DB query)
+    // 2. Merge any newly created local meds (strictly for active user)
     createdMeds
-      .filter((cm) => !deletedIds.has(cm.id))
+      .filter((cm) => (!activeUserId || cm.userId === activeUserId) && !deletedIds.has(cm.id))
       .forEach((cm) => {
         if (!map.has(cm.id)) {
           map.set(cm.id, cm);
@@ -348,7 +351,7 @@ export default function MedsScreen() {
       });
 
     return Array.from(map.values());
-  }, [dbMeds, localOverrides, deletedIds, createdMeds]);
+  }, [dbMeds, localOverrides, deletedIds, createdMeds, activeUserId]);
 
   const [filter, setFilter] = useState<'all' | 'active' | 'paused'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -885,6 +888,7 @@ export default function MedsScreen() {
         alarmEnabled,
         notificationId,
         userId: activeUserId,
+        userEmail: authUser?.email,
       }).unwrap();
 
       const newMed: Medication = {

@@ -89,4 +89,9 @@ export class CreateMedicationDto {
   @IsString()
   @IsOptional()
   userId?: string;
+
+  @ApiPropertyOptional({ example: 'user@medirem.app', description: 'Owner user Gmail / email address' })
+  @IsString()
+  @IsOptional()
+  userEmail?: string;
 }
