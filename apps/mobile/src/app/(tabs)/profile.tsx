@@ -186,7 +186,7 @@ export default function ProfileScreen() {
   const [selectedDeviceAudioFileName, setSelectedDeviceAudioFileName] = useState<string | null>(null);
 
   // Global Shared Theme Hook (synced across all screens & persisted)
-  const { themePref, timeTheme, toggleTheme: handleCycleTheme } = useAppTheme();
+  const { timeTheme } = useAppTheme();
 
   useEffect(() => {
     setVoiceAlertGlobalEnabled(isVoiceAlertActive);
@@ -1206,7 +1206,7 @@ export default function ProfileScreen() {
           </View>
 
           <TouchableOpacity
-            style={[styles.menuItem, { borderBottomColor: timeTheme.colors.cardBorder }]}
+            style={[styles.menuItem, { borderBottomColor: 'transparent' }]}
             activeOpacity={0.7}
             onPress={() => router.push('/(tabs)/meds')}>
             <View style={styles.menuItemLeft}>
@@ -1216,36 +1216,6 @@ export default function ProfileScreen() {
               <Text style={[styles.menuText, { color: timeTheme.colors.textPrimary }]}>Manage Medications ({medicationsCount})</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-          </TouchableOpacity>
-
-          {/* Dynamic Day & Night Theme Setting */}
-          <TouchableOpacity
-            style={[styles.menuItem, { borderBottomColor: 'transparent' }]}
-            activeOpacity={0.75}
-            onPress={handleCycleTheme}>
-            <View style={styles.menuItemLeft}>
-              <View style={[styles.menuIcon, { backgroundColor: timeTheme.colors.surfaceBg, borderWidth: 1, borderColor: timeTheme.colors.cardBorder }]}>
-                <Ionicons name={timeTheme.iconName} size={18} color={timeTheme.iconColor} />
-              </View>
-              <View style={{ flex: 1, paddingRight: 6 }}>
-                <Text style={[styles.menuText, { color: timeTheme.colors.textPrimary }]}>Day & Night Theme Mode</Text>
-                <Text style={[styles.menuSubText, { color: timeTheme.colors.textSecondary }]}>
-                  {themePref === 'auto'
-                    ? `Auto: ${timeTheme.greetingText} (${timeTheme.emoji})`
-                    : themePref === 'light'
-                    ? 'Day Light Mode ☀️'
-                    : themePref === 'evening'
-                    ? 'Evening Twilight 🌇'
-                    : 'Night Dark Mode 🌙'}
-                </Text>
-              </View>
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Text style={{ fontSize: 12, fontWeight: '700', color: timeTheme.iconColor }}>
-                {themePref === 'auto' ? 'Auto 🕒' : themePref.toUpperCase()}
-              </Text>
-              <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
-            </View>
           </TouchableOpacity>
         </View>
 
