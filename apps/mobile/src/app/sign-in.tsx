@@ -163,7 +163,7 @@ export default function SignInScreen() {
           </View>
 
           {/* Autofill Quick Chips */}
-          {/* <View style={{ gap: 8, marginBottom: 12 }}>
+          <View style={{ gap: 8, marginBottom: 12 }}>
             <TouchableOpacity
               onPress={() => handleAdminFill('rmdkaeysur@gmail.com')}
               style={[styles.demoChip, { backgroundColor: '#FEF3C7', borderColor: '#FCD34D' }]}
@@ -193,7 +193,7 @@ export default function SignInScreen() {
                 1-Tap Demo: <Text style={{ fontWeight: '700' }}>rahman@medirem.app</Text>
               </Text>
             </TouchableOpacity>
-          </View> */}
+          </View>
 
           {/* Error Banner if any */}
           {errorMessage ? (
