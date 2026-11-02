@@ -20,8 +20,8 @@ export function getApiBaseUrl(): string {
     }
   }
 
-  // 3. Fallback: Host LAN IP reachable from physical Android / iOS devices over local Wi-Fi
-  return 'http://10.10.23.22:3000/api';
+  // 3. Fallback: Production Render Cloud API URL
+  return 'https://medirem-app-react-native.onrender.com/api';
 }
 
 export const apiSlice = createApi({
