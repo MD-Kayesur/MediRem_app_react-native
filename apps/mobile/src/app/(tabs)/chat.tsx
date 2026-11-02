@@ -16,6 +16,8 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAppSelector } from '@/redux/hooks';
 import { selectCurrentUser } from '@/redux/slices/authSlice';
 import { useGetMedicationsQuery, useSendChatMessageMutation } from '@/redux';
+import { useAppTheme } from '@/hooks/useAppTheme';
+import { ThemeHeaderButton } from '@/components/ThemeHeaderButton';
 
 interface ChatMessage {
   id: string;
@@ -39,6 +41,7 @@ function getFormattedTime(): string {
 }
 
 export default function ChatScreen() {
+  const { timeTheme } = useAppTheme();
   const user = useAppSelector(selectCurrentUser);
   const activeUserId = user?.id;
 
@@ -234,9 +237,9 @@ export default function ChatScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: timeTheme.colors.background }]} edges={['top', 'left', 'right']}>
       {/* Header Bar */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: timeTheme.colors.headerBg, borderBottomColor: timeTheme.colors.cardBorder }]}>
         <View style={styles.headerLeft}>
           <View style={styles.botAvatar}>
             <LinearBotIcon />
@@ -244,29 +247,46 @@ export default function ChatScreen() {
           </View>
           <View>
             <View style={styles.titleRow}>
-              <Text style={styles.headerTitle}>MediRem AI</Text>
+              <Text style={[styles.headerTitle, { color: timeTheme.colors.textPrimary }]}>MediRem AI</Text>
               <View style={styles.aiBadge}>
                 <Ionicons name="sparkles" size={10} color="#FFFFFF" />
                 <Text style={styles.aiBadgeText}>Assistant</Text>
               </View>
             </View>
-            <Text style={styles.headerSubtitle}>
+            <Text style={[styles.headerSubtitle, { color: timeTheme.colors.textSecondary }]}>
               {user?.name ? `${user.name}'s Medical Copilot` : '24/7 Smart Medication Guide'}
             </Text>
           </View>
         </View>
 
-        <TouchableOpacity
-          onPress={handleClearChat}
-          style={styles.clearBtn}
-          activeOpacity={0.7}
-          accessibilityLabel="Reset conversation">
-          <Ionicons name="refresh" size={18} color="#64748B" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <ThemeHeaderButton size={36} />
+          <TouchableOpacity
+            onPress={handleClearChat}
+            style={[
+              styles.clearBtn,
+              {
+                backgroundColor: timeTheme.colors.surfaceBg,
+                borderColor: timeTheme.colors.cardBorder,
+                borderWidth: 1,
+              },
+            ]}
+            activeOpacity={0.7}
+            accessibilityLabel="Reset conversation">
+            <Ionicons name="refresh" size={18} color={timeTheme.colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Suggestion Chips Horizontal Bar */}
-      <View style={styles.chipsContainer}>
+      <View
+        style={[
+          styles.chipsContainer,
+          {
+            backgroundColor: timeTheme.colors.surfaceBg,
+            borderBottomColor: timeTheme.colors.cardBorder,
+          },
+        ]}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -275,9 +295,21 @@ export default function ChatScreen() {
             <TouchableOpacity
               key={idx}
               onPress={() => handleSendMessage(chip.query)}
-              style={styles.chipButton}
+              style={[
+                styles.chipButton,
+                {
+                  backgroundColor: timeTheme.isDark || timeTheme.isEvening ? '#1E293B' : '#EFF6FF',
+                  borderColor: timeTheme.isDark || timeTheme.isEvening ? '#334155' : '#BFDBFE',
+                },
+              ]}
               activeOpacity={0.75}>
-              <Text style={styles.chipText}>{chip.label}</Text>
+              <Text
+                style={[
+                  styles.chipText,
+                  { color: timeTheme.isDark || timeTheme.isEvening ? '#38BDF8' : '#208AEF' },
+                ]}>
+                {chip.label}
+              </Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -300,7 +332,14 @@ export default function ChatScreen() {
               ]}>
               {/* Bot Avatar on the left */}
               {isAi && (
-                <View style={styles.msgAvatarBox}>
+                <View
+                  style={[
+                    styles.msgAvatarBox,
+                    {
+                      backgroundColor: timeTheme.isDark || timeTheme.isEvening ? '#1E293B' : '#EFF6FF',
+                      borderColor: timeTheme.colors.cardBorder,
+                    },
+                  ]}>
                   <Ionicons name="sparkles" size={14} color="#208AEF" />
                 </View>
               )}
@@ -308,10 +347,18 @@ export default function ChatScreen() {
               <View
                 style={[
                   styles.bubble,
-                  isAi ? styles.bubbleAi : styles.bubbleUser,
+                  isAi
+                    ? [
+                        styles.bubbleAi,
+                        {
+                          backgroundColor: timeTheme.colors.card,
+                          borderColor: timeTheme.colors.cardBorder,
+                        },
+                      ]
+                    : styles.bubbleUser,
                 ]}>
                 {/* Formatted Message Content */}
-                <FormattedText text={msg.text} isAi={isAi} />
+                <FormattedText text={msg.text} isAi={isAi} isDark={timeTheme.isDark || timeTheme.isEvening} />
 
                 {/* Timestamp & Source badge */}
                 <View style={styles.metaRow}>
@@ -331,15 +378,31 @@ export default function ChatScreen() {
 
                 {/* Follow-up Quick Action Pills */}
                 {isAi && msg.quickReplies && msg.quickReplies.length > 0 && (
-                  <View style={styles.quickRepliesBox}>
+                  <View
+                    style={[
+                      styles.quickRepliesBox,
+                      { borderTopColor: timeTheme.colors.cardBorder },
+                    ]}>
                     {msg.quickReplies.map((reply, rIdx) => (
                       <TouchableOpacity
                         key={rIdx}
                         onPress={() => handleSendMessage(reply)}
-                        style={styles.quickReplyPill}
+                        style={[
+                          styles.quickReplyPill,
+                          {
+                            backgroundColor: timeTheme.isDark || timeTheme.isEvening ? '#1E293B' : '#EFF6FF',
+                            borderColor: timeTheme.colors.cardBorder,
+                          },
+                        ]}
                         activeOpacity={0.75}>
                         <Ionicons name="chatbubble-ellipses-outline" size={11} color="#208AEF" />
-                        <Text style={styles.quickReplyText}>{reply}</Text>
+                        <Text
+                          style={[
+                            styles.quickReplyText,
+                            { color: timeTheme.isDark || timeTheme.isEvening ? '#38BDF8' : '#208AEF' },
+                          ]}>
+                          {reply}
+                        </Text>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -352,11 +415,33 @@ export default function ChatScreen() {
         {/* Real-time Typing Bubble */}
         {isTyping && (
           <View style={[styles.messageRow, styles.messageRowAi]}>
-            <View style={styles.msgAvatarBox}>
+            <View
+              style={[
+                styles.msgAvatarBox,
+                {
+                  backgroundColor: timeTheme.isDark || timeTheme.isEvening ? '#1E293B' : '#EFF6FF',
+                  borderColor: timeTheme.colors.cardBorder,
+                },
+              ]}>
               <Ionicons name="sparkles" size={14} color="#208AEF" />
             </View>
-            <View style={[styles.bubble, styles.bubbleAi, styles.typingBubble]}>
-              <Text style={styles.typingText}>MediRem AI is analyzing records...</Text>
+            <View
+              style={[
+                styles.bubble,
+                styles.bubbleAi,
+                styles.typingBubble,
+                {
+                  backgroundColor: timeTheme.colors.card,
+                  borderColor: timeTheme.colors.cardBorder,
+                },
+              ]}>
+              <Text
+                style={[
+                  styles.typingText,
+                  { color: timeTheme.colors.textSecondary },
+                ]}>
+                MediRem AI is analyzing records...
+              </Text>
               <View style={styles.dotsRow}>
                 <View style={[styles.dot, styles.dot1]} />
                 <View style={[styles.dot, styles.dot2]} />
@@ -367,9 +452,21 @@ export default function ChatScreen() {
         )}
 
         {/* Bottom Medical Disclaimer */}
-        <View style={styles.medicalDisclaimerCard}>
-          <Ionicons name="shield-checkmark" size={14} color="#64748B" />
-          <Text style={styles.medicalDisclaimerText}>
+        <View
+          style={[
+            styles.medicalDisclaimerCard,
+            {
+              backgroundColor: timeTheme.colors.surfaceBg,
+              borderColor: timeTheme.colors.cardBorder,
+              borderWidth: 1,
+            },
+          ]}>
+          <Ionicons name="shield-checkmark" size={14} color={timeTheme.colors.textSecondary} />
+          <Text
+            style={[
+              styles.medicalDisclaimerText,
+              { color: timeTheme.colors.textSecondary },
+            ]}>
             Personalized guidance based on your database regimen. In emergencies, contact a physician immediately.
           </Text>
         </View>
@@ -379,7 +476,14 @@ export default function ChatScreen() {
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
-        <View style={styles.inputArea}>
+        <View
+          style={[
+            styles.inputArea,
+            {
+              backgroundColor: timeTheme.colors.surfaceBg,
+              borderTopColor: timeTheme.colors.cardBorder,
+            },
+          ]}>
           <TextInput
             placeholder="Ask about your medications, schedule, stock..."
             placeholderTextColor="#94A3B8"
@@ -388,7 +492,15 @@ export default function ChatScreen() {
             onSubmitEditing={() => handleSendMessage()}
             returnKeyType="send"
             multiline={false}
-            style={styles.textInput}
+            style={[
+              styles.textInput,
+              {
+                backgroundColor: timeTheme.colors.background,
+                color: timeTheme.colors.textPrimary,
+                borderColor: timeTheme.colors.cardBorder,
+                borderWidth: 1,
+              },
+            ]}
           />
 
           <TouchableOpacity
@@ -497,7 +609,7 @@ function LinearBotIcon() {
   );
 }
 
-function FormattedText({ text, isAi }: { text: string; isAi: boolean }) {
+function FormattedText({ text, isAi, isDark }: { text: string; isAi: boolean; isDark?: boolean }) {
   const lines = text.split('\n');
 
   return (
@@ -514,13 +626,15 @@ function FormattedText({ text, isAi }: { text: string; isAi: boolean }) {
             key={idx}
             style={[
               styles.messageText,
-              isAi ? styles.messageTextAi : styles.messageTextUser,
+              isAi
+                ? [styles.messageTextAi, isDark && { color: '#F1F5F9' }]
+                : styles.messageTextUser,
               line.startsWith('•') && styles.bulletLine,
             ]}>
             {parts.map((part, pIdx) => {
               if (part.startsWith('**') && part.endsWith('**')) {
                 return (
-                  <Text key={pIdx} style={styles.boldText}>
+                  <Text key={pIdx} style={[styles.boldText, isAi && isDark && { color: '#FFFFFF' }]}>
                     {part.slice(2, -2)}
                   </Text>
                 );

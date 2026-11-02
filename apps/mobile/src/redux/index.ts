@@ -3,12 +3,14 @@ import { setupListeners } from '@reduxjs/toolkit/query';
 import { apiSlice } from './api/apiSlice';
 import authReducer from './slices/authSlice';
 import alarmSettingsReducer from './slices/alarmSettingsSlice';
+import themeReducer from './slices/themeSlice';
 
 export const store = configureStore({
   reducer: {
     [apiSlice.reducerPath]: apiSlice.reducer,
     auth: authReducer,
     alarmSettings: alarmSettingsReducer,
+    theme: themeReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
@@ -30,3 +32,4 @@ export * from './api/medicationsApi';
 export * from './api/chatApi';
 export * from './slices/authSlice';
 export * from './slices/alarmSettingsSlice';
+export * from './slices/themeSlice';

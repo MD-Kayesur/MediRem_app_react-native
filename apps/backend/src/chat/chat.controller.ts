@@ -44,3 +44,4 @@ export class ChatController {
     return this.chatService.processChat(dto, headerUserId, headerUserEmail);
   }
 }
+

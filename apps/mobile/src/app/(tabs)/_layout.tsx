@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Tabs, router } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import {
@@ -11,11 +11,7 @@ import {
   Text,
 } from 'react-native';
 
-import {
-  getTimeGreetingThemeDetails,
-  getThemePreference,
-  ThemePreference,
-} from '@/utils/timeGreetingTheme';
+import { useAppTheme } from '@/hooks/useAppTheme';
 
 interface TabButtonProps {
   children?: React.ReactNode;
@@ -180,13 +176,7 @@ function FloatingAiTabButton({
 
 export default function TabLayout() {
   const scheme = useColorScheme();
-  const [themePref, setThemePref] = useState<ThemePreference>('auto');
-
-  useEffect(() => {
-    getThemePreference().then((pref) => setThemePref(pref));
-  }, []);
-
-  const timeTheme = getTimeGreetingThemeDetails(new Date(), themePref);
+  const { themePref, timeTheme } = useAppTheme();
   const isDarkTheme = timeTheme.isDark || (themePref === 'auto' && scheme === 'dark');
 
   return (

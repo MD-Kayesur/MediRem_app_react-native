@@ -43,12 +43,8 @@ import {
   setVoiceAlertGlobalEnabled,
 } from '@/utils/alarm';
 import { clearUserSession } from '@/utils/authStorage';
-import {
-  getTimeGreetingThemeDetails,
-  getThemePreference,
-  saveThemePreference,
-  ThemePreference,
-} from '@/utils/timeGreetingTheme';
+import { useAppTheme } from '@/hooks/useAppTheme';
+import { ThemeHeaderButton } from '@/components/ThemeHeaderButton';
 
 const TONE_PRESETS = [
   {
@@ -189,37 +185,8 @@ export default function ProfileScreen() {
   const [isPlayingVoicePreview, setIsPlayingVoicePreview] = useState(false);
   const [selectedDeviceAudioFileName, setSelectedDeviceAudioFileName] = useState<string | null>(null);
 
-  // Theme & Dynamic Time Greeting State
-  const [themePref, setThemePref] = useState<ThemePreference>('auto');
-  const [profileTime, setProfileTime] = useState(() => new Date());
-
-  useEffect(() => {
-    getThemePreference().then((pref) => setThemePref(pref));
-    const timer = setInterval(() => setProfileTime(new Date()), 10000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const timeTheme = getTimeGreetingThemeDetails(profileTime, themePref);
-
-  const handleCycleTheme = async () => {
-    let next: ThemePreference = 'auto';
-    if (themePref === 'auto') next = 'light';
-    else if (themePref === 'light') next = 'evening';
-    else if (themePref === 'evening') next = 'dark';
-    else next = 'auto';
-
-    setThemePref(next);
-    await saveThemePreference(next);
-
-    const labels: Record<ThemePreference, string> = {
-      auto: 'Automatic 🕒 (Changes with Morning, Noon, Evening, Night)',
-      light: 'Light Mode ☀️ (Daytime Light)',
-      evening: 'Twilight Mode 🌇 (Evening Twilight)',
-      dark: 'Dark Mode 🌙 (Night Dark)',
-    };
-
-    Alert.alert('Theme Updated', `Active theme is now: ${labels[next]}`);
-  };
+  // Global Shared Theme Hook (synced across all screens & persisted)
+  const { themePref, timeTheme, toggleTheme: handleCycleTheme } = useAppTheme();
 
   useEffect(() => {
     setVoiceAlertGlobalEnabled(isVoiceAlertActive);
@@ -608,34 +575,29 @@ export default function ProfileScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white dark:bg-slate-900" style={styles.container}>
+    <SafeAreaView
+      style={[
+        styles.container,
+        { backgroundColor: timeTheme.colors.background },
+      ]}>
       {/* Header Bar */}
-      <View className="px-5 pt-3 pb-2 flex-row items-center justify-between" style={styles.header}>
-        <Text className="text-2xl font-black text-slate-900 dark:text-white" style={styles.headerTitle}>
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: timeTheme.colors.headerBg,
+            borderBottomColor: timeTheme.colors.cardBorder,
+          },
+        ]}>
+        <Text
+          style={[
+            styles.headerTitle,
+            { color: timeTheme.colors.textPrimary },
+          ]}>
           Profile
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <TouchableOpacity
-            onPress={handleCycleTheme}
-            style={[
-              styles.headerThemeBtn,
-              {
-                backgroundColor: timeTheme.colors.surfaceBg,
-                borderColor: timeTheme.colors.cardBorder,
-              },
-            ]}
-            activeOpacity={0.75}
-            accessibilityLabel="Switch Day/Night Theme">
-            <Ionicons name={timeTheme.iconName} size={19} color={timeTheme.iconColor} />
-            {themePref === 'auto' && (
-              <View
-                style={[
-                  styles.headerThemeAutoDot,
-                  { backgroundColor: timeTheme.iconColor },
-                ]}
-              />
-            )}
-          </TouchableOpacity>
+          <ThemeHeaderButton size={36} />
           <TouchableOpacity
             onPress={() => refetch()}
             style={styles.refreshIconBtn}
@@ -664,7 +626,14 @@ export default function ProfileScreen() {
           />
         }>
         {/* User Profile Card from Neon DB */}
-        <View style={styles.userCard}>
+        <View
+          style={[
+            styles.userCard,
+            {
+              backgroundColor: timeTheme.colors.card,
+              borderColor: timeTheme.colors.cardBorder,
+            },
+          ]}>
           <TouchableOpacity
             onPress={openPhotoModal}
             activeOpacity={0.85}
@@ -688,7 +657,12 @@ export default function ProfileScreen() {
 
           <View style={styles.userInfoCol}>
             <View style={styles.nameRow}>
-              <Text style={styles.userName} numberOfLines={1}>
+              <Text
+                style={[
+                  styles.userName,
+                  { color: timeTheme.colors.textPrimary },
+                ]}
+                numberOfLines={1}>
                 {displayName}
               </Text>
 
@@ -748,42 +722,56 @@ export default function ProfileScreen() {
         </View>
 
         {/* Database Stats Card */}
-        <View style={styles.statsCard}>
+        <View
+          style={[
+            styles.statsCard,
+            {
+              backgroundColor: timeTheme.colors.card,
+              borderColor: timeTheme.colors.cardBorder,
+            },
+          ]}>
           <View style={styles.statBox}>
-            <Text style={styles.statNumber}>{medicationsCount}</Text>
-            <Text style={styles.statLabel}>Active Meds</Text>
+            <Text style={[styles.statNumber, { color: timeTheme.colors.textPrimary }]}>{medicationsCount}</Text>
+            <Text style={[styles.statLabel, { color: timeTheme.colors.textSecondary }]}>Active Meds</Text>
           </View>
 
-          <View style={styles.statDivider} />
+          <View style={[styles.statDivider, { backgroundColor: timeTheme.colors.cardBorder }]} />
 
           <View style={styles.statBox}>
-            <Text style={styles.statNumber}>100%</Text>
-            <Text style={styles.statLabel}>Adherence</Text>
+            <Text style={[styles.statNumber, { color: timeTheme.colors.textPrimary }]}>100%</Text>
+            <Text style={[styles.statLabel, { color: timeTheme.colors.textSecondary }]}>Adherence</Text>
           </View>
 
-          <View style={styles.statDivider} />
+          <View style={[styles.statDivider, { backgroundColor: timeTheme.colors.cardBorder }]} />
 
           <View style={styles.statBox}>
-            <Text style={styles.statNumber}>Active</Text>
-            <Text style={styles.statLabel}>Loud Alarm</Text>
+            <Text style={[styles.statNumber, { color: timeTheme.colors.textPrimary }]}>Active</Text>
+            <Text style={[styles.statLabel, { color: timeTheme.colors.textSecondary }]}>Loud Alarm</Text>
           </View>
         </View>
 
         {/* Section: Admin Panel (👑 Strictly for ADMIN Role) */}
         {isAdmin && (
-          <View style={styles.adminCard}>
+          <View
+            style={[
+              styles.adminCard,
+              {
+                backgroundColor: timeTheme.colors.card,
+                borderColor: timeTheme.colors.cardBorder,
+              },
+            ]}>
             <View style={styles.adminCardHeader}>
               <View style={styles.adminCardIconBox}>
                 <Ionicons name="shield-checkmark" size={22} color="#D97706" />
               </View>
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                  <Text style={styles.adminCardTitle}>Admin Panel</Text>
+                  <Text style={[styles.adminCardTitle, { color: timeTheme.colors.textPrimary }]}>Admin Panel</Text>
                   <View style={styles.adminOnlyTag}>
                     <Text style={styles.adminOnlyTagText}>ADMIN ONLY</Text>
                   </View>
                 </View>
-                <Text style={styles.adminCardSub}>
+                <Text style={[styles.adminCardSub, { color: timeTheme.colors.textSecondary }]}>
                   {allUsersResponse?.total ?? 6} registered users in Neon PostgreSQL
                 </Text>
               </View>
@@ -799,8 +787,15 @@ export default function ProfileScreen() {
         )}
 
         {/* Section: Account & Personal Information */}
-        <Text style={styles.sectionHeader}>Account Details</Text>
-        <View style={styles.menuGroup}>
+        <Text style={[styles.sectionHeader, { color: timeTheme.colors.textSecondary }]}>Account Details</Text>
+        <View
+          style={[
+            styles.menuGroup,
+            {
+              backgroundColor: timeTheme.colors.card,
+              borderColor: timeTheme.colors.cardBorder,
+            },
+          ]}>
           <TouchableOpacity
             style={styles.menuItem}
             onPress={openEditModal}
@@ -935,10 +930,21 @@ export default function ProfileScreen() {
         </View>
 
         {/* List of Available Ringtones (CRUD READ / SELECT / UPDATE / DELETE) */}
-        <View style={styles.ringtonesCard}>
+        <View
+          style={[
+            styles.ringtonesCard,
+            {
+              backgroundColor: timeTheme.colors.card,
+              borderColor: timeTheme.colors.cardBorder,
+            },
+          ]}>
           <View style={styles.ringtonesCardHeader}>
-            <Text style={styles.ringtonesCardHeaderTitle}>Available Ringtones ({ringtonesList.length})</Text>
-            <Text style={styles.ringtonesCardHeaderSub}>Tap any ringtone to select as alarm sound</Text>
+            <Text style={[styles.ringtonesCardHeaderTitle, { color: timeTheme.colors.textPrimary }]}>
+              Available Ringtones ({ringtonesList.length})
+            </Text>
+            <Text style={[styles.ringtonesCardHeaderSub, { color: timeTheme.colors.textSecondary }]}>
+              Tap any ringtone to select as alarm sound
+            </Text>
           </View>
 
           {ringtonesList.map((ringtone, index) => {
@@ -1053,8 +1059,15 @@ export default function ProfileScreen() {
         </View>
 
         {/* Section: App Settings */}
-        <Text style={styles.sectionHeader}>App Settings</Text>
-        <View style={styles.menuGroup}>
+        <Text style={[styles.sectionHeader, { color: timeTheme.colors.textSecondary }]}>App Settings</Text>
+        <View
+          style={[
+            styles.menuGroup,
+            {
+              backgroundColor: timeTheme.colors.card,
+              borderColor: timeTheme.colors.cardBorder,
+            },
+          ]}>
           <View style={styles.menuItem}>
             <View style={styles.menuItemLeft}>
               <View style={styles.menuIcon}>
@@ -1182,7 +1195,14 @@ export default function ProfileScreen() {
         </View>
 
         {/* MediRem App Branding Card */}
-        <View style={styles.brandingCard}>
+        <View
+          style={[
+            styles.brandingCard,
+            {
+              backgroundColor: timeTheme.colors.card,
+              borderColor: timeTheme.colors.cardBorder,
+            },
+          ]}>
           <Image
             source={require('@/../assets/images/medirem-logo.png')}
             style={styles.brandLogo}

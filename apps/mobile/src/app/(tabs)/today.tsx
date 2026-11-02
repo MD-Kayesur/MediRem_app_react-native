@@ -28,12 +28,8 @@ import {
   syncOfflineQueue,
   checkIsOnline,
 } from '@/utils/offlineSync';
-import {
-  getTimeGreetingThemeDetails,
-  getThemePreference,
-  saveThemePreference,
-  ThemePreference,
-} from '@/utils/timeGreetingTheme';
+import { useAppTheme } from '@/hooks/useAppTheme';
+import { ThemeHeaderButton } from '@/components/ThemeHeaderButton';
 
 interface DoseItem {
   id: string;
@@ -147,22 +143,11 @@ export default function HomeScreen() {
   const [takeDoseMutation] = useTakeDoseMutation();
 
   const [takenIds, setTakenIds] = useState<Set<string>>(() => new Set());
-  const [currentTime, setCurrentTime] = useState(() => new Date());
   const [cachedMeds, setCachedMeds] = useState<any[]>([]);
   const [isOnlineState, setIsOnlineState] = useState(true);
-  const [themePref, setThemePref] = useState<ThemePreference>('auto');
 
-  // Load saved theme preference on mount
-  useEffect(() => {
-    getThemePreference().then((pref) => {
-      setThemePref(pref);
-    });
-  }, []);
-
-  // Dynamic automatic greeting & day/evening/night theme calculated on every second
-  const timeTheme = useMemo(() => {
-    return getTimeGreetingThemeDetails(currentTime, themePref);
-  }, [currentTime, themePref]);
+  // Global shared theme hook (synced across all screens)
+  const { timeTheme, currentTime } = useAppTheme();
 
   // Load offline cached medications on mount & sync queue when online
   useEffect(() => {
@@ -225,12 +210,6 @@ export default function HomeScreen() {
     return items;
   }, [dbMeds, cachedMeds, takenIds, currentTime]);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   const todayAlarmedRef = useRef<Set<string>>(new Set());
 
@@ -324,31 +303,6 @@ export default function HomeScreen() {
           },
         },
       ]
-    );
-  };
-
-  const handleToggleTheme = async () => {
-    // Cycle: auto -> light -> evening -> dark -> auto
-    let nextPref: ThemePreference = 'auto';
-    if (themePref === 'auto') nextPref = 'light';
-    else if (themePref === 'light') nextPref = 'evening';
-    else if (themePref === 'evening') nextPref = 'dark';
-    else nextPref = 'auto';
-
-    setThemePref(nextPref);
-    await saveThemePreference(nextPref);
-
-    const modeLabels: Record<ThemePreference, string> = {
-      auto: 'Automatic 🕒 (Morning ☀️, Noon 🌤️, Evening 🌇, Night 🌙)',
-      light: 'Light Theme ☀️ (Daytime Light)',
-      evening: 'Twilight Theme 🌇 (Soft Evening Dark)',
-      dark: 'Dark Theme 🌙 (Full Night Dark)',
-    };
-
-    Alert.alert(
-      'Theme Mode',
-      `Current: ${modeLabels[nextPref]}\n\nIn 'Auto' mode, your greeting and theme update automatically with the clock throughout the day.`,
-      [{ text: 'OK' }]
     );
   };
 
@@ -448,37 +402,7 @@ export default function HomeScreen() {
                 resizeMode="contain"
               />
             </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleToggleTheme}
-              style={[
-                styles.themeBtn,
-                {
-                  backgroundColor: timeTheme.colors.surfaceBg,
-                  borderColor: timeTheme.colors.cardBorder,
-                },
-              ]}
-              activeOpacity={0.75}
-              accessibilityLabel="Switch Day/Night Theme">
-              <Ionicons name={timeTheme.iconName} size={21} color={timeTheme.iconColor} />
-              {themePref === 'auto' && (
-                <View
-                  style={[
-                    styles.themeAutoBadge,
-                    {
-                      backgroundColor: timeTheme.colors.badgeBg,
-                      borderColor: timeTheme.colors.badgeBorder,
-                    },
-                  ]}>
-                  <Text
-                    style={[
-                      styles.themeAutoBadgeText,
-                      { color: timeTheme.colors.badgeText },
-                    ]}>
-                    A
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
+            <ThemeHeaderButton size={38} />
           </View>
         </View>
       </View>

@@ -42,6 +42,8 @@ import {
   useTakeDoseMutation,
 } from '@/redux';
 import { useAppSelector } from '@/redux/hooks';
+import { useAppTheme } from '@/hooks/useAppTheme';
+import { ThemeHeaderButton } from '@/components/ThemeHeaderButton';
 import {
   getCachedMedications,
   setCachedMedications,
@@ -283,6 +285,7 @@ function getRoutineDurationInfo(startDateStr?: string, endDateStr?: string): {
 }
 
 export default function MedsScreen() {
+  const { timeTheme } = useAppTheme();
   const authUser = useAppSelector((state) => state.auth.user);
   const activeUserId = authUser?.id;
   const authToken = useAppSelector((state) => state.auth.token);
@@ -1039,9 +1042,9 @@ export default function MedsScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white dark:bg-slate-900" style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: timeTheme.colors.background }]}>
       {/* Top Header */}
-      <View className="px-5 pt-3 pb-2" style={styles.header}>
+      <View style={[styles.header, { backgroundColor: timeTheme.colors.headerBg }]}>
         <View className="flex-row justify-between items-center mb-3" style={styles.headerRow}>
           <View className="flex-row items-center gap-3">
             <Image
@@ -1051,7 +1054,7 @@ export default function MedsScreen() {
             />
             <View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text className="text-2xl font-black text-slate-900 dark:text-white" style={styles.title}>
+                <Text style={[styles.title, { color: timeTheme.colors.textPrimary }]}>
                   My Medications
                 </Text>
                 <View
@@ -1062,9 +1065,13 @@ export default function MedsScreen() {
                     paddingHorizontal: 7,
                     paddingVertical: 2,
                     borderRadius: 10,
-                    backgroundColor: isOnlineState ? '#ECFDF5' : '#FEF3C7',
+                    backgroundColor: isOnlineState
+                      ? (timeTheme.isDark ? '#064E3B40' : '#ECFDF5')
+                      : (timeTheme.isDark ? '#78350F40' : '#FEF3C7'),
                     borderWidth: 1,
-                    borderColor: isOnlineState ? '#A7F3D0' : '#FDE68A',
+                    borderColor: isOnlineState
+                      ? (timeTheme.isDark ? '#05966960' : '#A7F3D0')
+                      : (timeTheme.isDark ? '#D9770660' : '#FDE68A'),
                   }}>
                   <View
                     style={{
@@ -1080,17 +1087,19 @@ export default function MedsScreen() {
                       fontWeight: '700',
                       color: isOnlineState ? '#059669' : '#B45309',
                     }}>
-                    {isOnlineState ? 'Cloud Synced' : 'Offline (Alarm Active)'}
+                    {isOnlineState ? 'Cloud Synced' : 'Offline'}
                   </Text>
                 </View>
               </View>
-              <Text className="text-xs text-slate-400" style={styles.subtitle}>
+              <Text style={[styles.subtitle, { color: timeTheme.colors.textSecondary }]}>
                 {meds.filter((m) => m.status === 'active').length} active routines
               </Text>
             </View>
           </View>
 
           <View className="flex-row items-center gap-2">
+            <ThemeHeaderButton size={36} />
+
             {isAlarmPlaying && (
               <TouchableOpacity
                 onPress={handleOpenAlarmModal}
@@ -1147,15 +1156,22 @@ export default function MedsScreen() {
         </View>
 
         {/* Search Bar */}
-        <View className="flex-row items-center bg-slate-100 dark:bg-slate-800 rounded-xl px-3 py-2 mb-3" style={styles.searchBar}>
-          <Ionicons name="search" size={18} color="#94A3B8" />
+        <View
+          style={[
+            styles.searchBar,
+            {
+              backgroundColor: timeTheme.colors.surfaceBg,
+              borderColor: timeTheme.colors.cardBorder,
+              borderWidth: 1,
+            },
+          ]}>
+          <Ionicons name="search" size={18} color={timeTheme.colors.textSecondary} />
           <TextInput
             placeholder="Search medications..."
             placeholderTextColor="#94A3B8"
             value={searchQuery}
             onChangeText={setSearchQuery}
-            className="flex-1 ml-2 text-sm text-slate-900 dark:text-white"
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: timeTheme.colors.textPrimary }]}
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')}>
@@ -1226,8 +1242,14 @@ export default function MedsScreen() {
           return (
             <View
               key={`${med.id}_${idx}`}
-              className="p-4 rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-800/80 mb-3.5 shadow-sm"
-              style={[styles.medCard, isPaused && styles.medCardPaused]}>
+              style={[
+                styles.medCard,
+                {
+                  backgroundColor: timeTheme.colors.card,
+                  borderColor: timeTheme.colors.cardBorder,
+                },
+                isPaused && styles.medCardPaused,
+              ]}>
               {/* Header inside card */}
               <View className="flex-row items-center justify-between mb-2.5" style={styles.cardHeader}>
                 <View className="flex-row items-center gap-3" style={styles.medIconRow}>
@@ -1245,14 +1267,14 @@ export default function MedsScreen() {
                     </View>
                   )}
 
-                  <View style={{ flex: 1 }}>
-                    <Text className="text-base font-bold text-slate-900 dark:text-white" style={styles.medName}>
-                      {med.name} <Text className="text-sm font-normal text-slate-500" style={styles.medDosage}>{med.dosage}</Text>
-                    </Text>
-                    <Text className="text-xs text-slate-400" style={styles.medMeta}>
-                      {med.frequency} • {med.instructions}
-                    </Text>
-                  </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.medName, { color: timeTheme.colors.textPrimary }]}>
+                        {med.name} <Text style={[styles.medDosage, { color: timeTheme.colors.textSecondary }]}>{med.dosage}</Text>
+                      </Text>
+                      <Text style={[styles.medMeta, { color: timeTheme.colors.textSecondary }]}>
+                        {med.frequency} • {med.instructions}
+                      </Text>
+                    </View>
                 </View>
 
                 {/* Top Actions: Status badge and Delete button */}

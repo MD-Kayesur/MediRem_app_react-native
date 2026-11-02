@@ -13,6 +13,8 @@ import { CalendarPickerModal } from '@/components/date-time-picker-modal';
 import { useGetDoseHistoryQuery } from '@/redux';
 import { useAppSelector } from '@/redux/hooks';
 import { selectCurrentUser } from '@/redux/slices/authSlice';
+import { useAppTheme } from '@/hooks/useAppTheme';
+import { ThemeHeaderButton } from '@/components/ThemeHeaderButton';
 
 interface HistoryLog {
   id: string;
@@ -27,6 +29,7 @@ interface HistoryLog {
 }
 
 export default function HistoryScreen() {
+  const { timeTheme } = useAppTheme();
   const user = useAppSelector(selectCurrentUser);
   const activeUserId = user?.id;
 
@@ -152,41 +155,62 @@ export default function HistoryScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white dark:bg-slate-900" style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: timeTheme.colors.background }]}>
       {/* Top Header */}
-      <View className="px-5 pt-3 pb-2" style={styles.header}>
+      <View style={[styles.header, { backgroundColor: timeTheme.colors.headerBg }]}>
         <View className="flex-row items-center justify-between mb-3" style={styles.titleRow}>
           <View className="flex-row items-center gap-2.5">
-            <View className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-slate-800 items-center justify-center" style={styles.calendarIconBox}>
+            <View
+              style={[
+                styles.calendarIconBox,
+                { backgroundColor: timeTheme.isDark || timeTheme.isEvening ? '#1E293B' : '#EFF6FF' },
+              ]}>
               <Ionicons name="calendar" size={20} color="#208AEF" />
             </View>
             <View>
-              <Text className="text-2xl font-black text-slate-900 dark:text-white" style={styles.title}>
+              <Text style={[styles.title, { color: timeTheme.colors.textPrimary }]}>
                 Dose History
               </Text>
-              <Text className="text-xs text-slate-400">
+              <Text style={{ fontSize: 12, color: timeTheme.colors.textSecondary }}>
                 Live intake logs from Neon Cloud PostgreSQL
               </Text>
             </View>
           </View>
 
-          {/* Quick Refresh Icon */}
-          <TouchableOpacity
-            onPress={() => refetch()}
-            className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 items-center justify-center"
-            activeOpacity={0.7}
-            accessibilityLabel="Refresh history">
-            <Ionicons name={isFetching ? 'sync' : 'refresh'} size={16} color="#208AEF" />
-          </TouchableOpacity>
+          {/* Quick Refresh Icon & Theme Button */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <ThemeHeaderButton size={36} />
+            <TouchableOpacity
+              onPress={() => refetch()}
+              style={[
+                styles.refreshIconBtn,
+                {
+                  backgroundColor: timeTheme.colors.surfaceBg,
+                  borderColor: timeTheme.colors.cardBorder,
+                  borderWidth: 1,
+                },
+              ]}
+              activeOpacity={0.7}
+              accessibilityLabel="Refresh history">
+              <Ionicons name={isFetching ? 'sync' : 'refresh'} size={16} color="#208AEF" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Date Switcher Bar with All-Dates Mode */}
-        <View className="flex-row justify-between items-center bg-slate-50 dark:bg-slate-800 rounded-2xl px-3 py-2 mb-3 border border-slate-100 dark:border-slate-700" style={styles.dateBar}>
+        <View
+          style={[
+            styles.dateBar,
+            {
+              backgroundColor: timeTheme.colors.surfaceBg,
+              borderColor: timeTheme.colors.cardBorder,
+            },
+          ]}>
           <TouchableOpacity
             onPress={handlePrevDay}
             className="p-1 rounded-full"
             activeOpacity={0.7}>
-            <Ionicons name="chevron-back" size={20} color="#64748B" />
+            <Ionicons name="chevron-back" size={20} color={timeTheme.colors.textSecondary} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -194,7 +218,7 @@ export default function HistoryScreen() {
             className="flex-row items-center gap-1.5"
             activeOpacity={0.7}>
             <Ionicons name="calendar-outline" size={15} color="#208AEF" />
-            <Text className="text-sm font-bold text-slate-800 dark:text-white" style={styles.dateText}>
+            <Text style={[styles.dateText, { color: timeTheme.colors.textPrimary }]}>
               {isAllDatesMode ? 'All History Records' : dates[currentDateIndex]}
             </Text>
           </TouchableOpacity>
@@ -205,7 +229,7 @@ export default function HistoryScreen() {
             disabled={isAllDatesMode || currentDateIndex === 0}
             style={{ opacity: isAllDatesMode || currentDateIndex === 0 ? 0.3 : 1 }}
             activeOpacity={0.7}>
-            <Ionicons name="chevron-forward" size={20} color="#64748B" />
+            <Ionicons name="chevron-forward" size={20} color={timeTheme.colors.textSecondary} />
           </TouchableOpacity>
         </View>
 
@@ -284,16 +308,21 @@ export default function HistoryScreen() {
             {filteredLogs.map((log) => (
               <View
                 key={log.id}
-                className="flex-row items-center justify-between p-4 rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-800/80 shadow-sm"
-                style={styles.logCard}>
+                style={[
+                  styles.logCard,
+                  {
+                    backgroundColor: timeTheme.colors.card,
+                    borderColor: timeTheme.colors.cardBorder,
+                  },
+                ]}>
                 <View className="flex-row items-center gap-3.5 flex-1" style={styles.logLeft}>
                   {renderStatusBadge(log.status)}
                   <View style={{ flex: 1 }}>
-                    <Text className="text-base font-bold text-slate-900 dark:text-white" style={styles.logMedName}>
+                    <Text style={[styles.logMedName, { color: timeTheme.colors.textPrimary }]}>
                       {log.medicationName}{' '}
-                      <Text className="text-sm font-normal text-slate-500" style={styles.logDosage}>({log.dosage})</Text>
+                      <Text style={[styles.logDosage, { color: timeTheme.colors.textSecondary }]}>({log.dosage})</Text>
                     </Text>
-                    <Text className="text-xs text-slate-400 capitalize" style={styles.logMeta}>
+                    <Text style={[styles.logMeta, { color: timeTheme.colors.textSecondary }]}>
                       {log.status === 'taken' ? '✓ Taken' : log.status} • {log.displayDate}
                     </Text>
                   </View>
@@ -322,22 +351,36 @@ export default function HistoryScreen() {
         )}
 
         {/* Live Adherence Summary Card dynamically calculated from database */}
-        <View className="flex-row items-center justify-between p-5 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 mt-6 shadow-sm" style={styles.summaryCard}>
+        <View
+          style={[
+            styles.summaryCard,
+            {
+              backgroundColor: timeTheme.colors.surfaceBg,
+              borderColor: timeTheme.colors.cardBorder,
+            },
+          ]}>
           <View>
-            <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1" style={styles.summaryLabel}>
+            <Text style={[styles.summaryLabel, { color: timeTheme.colors.textSecondary }]}>
               Overall Adherence
             </Text>
-            <Text className="text-2xl font-black text-slate-900 dark:text-white" style={styles.summaryRatio}>
+            <Text style={[styles.summaryRatio, { color: timeTheme.colors.textPrimary }]}>
               {takenCount} / {totalRecordedCount}
             </Text>
-            <Text className="text-xs text-slate-500" style={styles.summarySub}>
+            <Text style={[styles.summarySub, { color: timeTheme.colors.textSecondary }]}>
               {skippedCount > 0 ? `${skippedCount} skipped • ` : ''}doses taken on schedule
             </Text>
           </View>
 
           {/* Dynamic Circular Ring Percentage */}
-          <View className="w-20 h-20 rounded-full border-4 border-emerald-500 items-center justify-center bg-white dark:bg-slate-900 shadow-sm" style={styles.ringBox}>
-            <Text className="text-lg font-black text-emerald-600" style={styles.ringText}>
+          <View
+            style={[
+              styles.ringBox,
+              {
+                backgroundColor: timeTheme.colors.card,
+                borderColor: '#10B981',
+              },
+            ]}>
+            <Text style={styles.ringText}>
               {adherenceRate}%
             </Text>
           </View>
@@ -364,6 +407,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+  },
+  refreshIconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   header: {
     paddingHorizontal: 20,
