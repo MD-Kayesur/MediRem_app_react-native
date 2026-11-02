@@ -51,13 +51,19 @@ export async function initializeNotificationService(): Promise<boolean> {
       try {
         await Notifications.setNotificationChannelAsync(NOTIFICATION_CHANNEL_ID, {
           name: 'Medication Alarms & Reminders',
-          importance: Notifications.AndroidImportance?.MAX ?? 7,
-          vibrationPattern: [0, 500, 250, 500, 250, 500],
+          importance: Notifications.AndroidImportance?.MAX ?? 5,
+          vibrationPattern: [0, 800, 400, 800, 400, 800],
           lightColor: '#208AEF',
           sound: 'default',
           enableVibrate: true,
           enableLights: true,
           showBadge: true,
+          bypassDnd: true,
+          lockscreenVisibility: Notifications.AndroidNotificationVisibility?.PUBLIC ?? 1,
+          audioAttributes: {
+            usage: Notifications.AndroidAudioUsage?.ALARM ?? 4,
+            contentType: Notifications.AndroidAudioContentType?.SONIFICATION ?? 4,
+          },
         });
       } catch {
         // Channel setup fallback
@@ -126,6 +132,8 @@ export async function scheduleMedicationReminder(params: ScheduleReminderParams)
           body,
           sound: true,
           badge: 1,
+          priority: Notifications.AndroidNotificationPriority?.MAX ?? 'max',
+          vibrate: [0, 800, 400, 800, 400, 800],
           data: {
             medId: params.id,
             name: params.name,
