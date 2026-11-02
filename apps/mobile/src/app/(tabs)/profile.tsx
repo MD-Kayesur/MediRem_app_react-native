@@ -587,6 +587,9 @@ export default function ProfileScreen() {
           {
             backgroundColor: timeTheme.colors.headerBg,
             borderBottomColor: timeTheme.colors.cardBorder,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
           },
         ]}>
         <Text
@@ -600,13 +603,20 @@ export default function ProfileScreen() {
           <ThemeHeaderButton size={36} />
           <TouchableOpacity
             onPress={() => refetch()}
-            style={styles.refreshIconBtn}
+            style={[
+              styles.refreshIconBtn,
+              {
+                backgroundColor: timeTheme.colors.surfaceBg,
+                borderColor: timeTheme.colors.cardBorder,
+                borderWidth: 1,
+              },
+            ]}
             activeOpacity={0.7}
             accessibilityLabel="Refresh profile">
             <Ionicons
               name="refresh"
-              size={20}
-              color={isProfileFetching ? '#208AEF' : '#64748B'}
+              size={18}
+              color={isProfileFetching ? '#208AEF' : (timeTheme.isDark ? '#94A3B8' : '#64748B')}
             />
           </TouchableOpacity>
         </View>
@@ -797,32 +807,32 @@ export default function ProfileScreen() {
             },
           ]}>
           <TouchableOpacity
-            style={styles.menuItem}
+            style={[styles.menuItem, { borderBottomColor: timeTheme.colors.cardBorder }]}
             onPress={openEditModal}
             activeOpacity={0.7}>
             <View style={styles.menuItemLeft}>
-              <View style={styles.menuIcon}>
+              <View style={[styles.menuIcon, { backgroundColor: timeTheme.isDark ? '#1E293B' : '#E6F4FE' }]}>
                 <Ionicons name="person-outline" size={18} color="#208AEF" />
               </View>
               <View>
-                <Text style={styles.menuText}>Personal Information</Text>
-                <Text style={styles.menuSubText}>{displayName} • {displayPhone || 'Add phone'}</Text>
+                <Text style={[styles.menuText, { color: timeTheme.colors.textPrimary }]}>Personal Information</Text>
+                <Text style={[styles.menuSubText, { color: timeTheme.colors.textSecondary }]}>{displayName} • {displayPhone || 'Add phone'}</Text>
               </View>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.menuItem}
+            style={[styles.menuItem, { borderBottomColor: timeTheme.colors.cardBorder }]}
             onPress={openPhotoModal}
             activeOpacity={0.7}>
             <View style={styles.menuItemLeft}>
-              <View style={[styles.menuIcon, { backgroundColor: '#EDE9FE' }]}>
+              <View style={[styles.menuIcon, { backgroundColor: timeTheme.isDark ? '#2E1065' : '#EDE9FE' }]}>
                 <Ionicons name="camera-outline" size={18} color="#8B5CF6" />
               </View>
               <View>
-                <Text style={styles.menuText}>Profile Photo</Text>
-                <Text style={styles.menuSubText}>
+                <Text style={[styles.menuText, { color: timeTheme.colors.textPrimary }]}>Profile Photo</Text>
+                <Text style={[styles.menuSubText, { color: timeTheme.colors.textSecondary }]}>
                   {userProfile?.avatarUrl ? 'Change or remove picture' : 'Upload photo or choose avatar'}
                 </Text>
               </View>
@@ -831,32 +841,32 @@ export default function ProfileScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.menuItem}
+            style={[styles.menuItem, { borderBottomColor: timeTheme.colors.cardBorder }]}
             onPress={openPasswordModal}
             activeOpacity={0.7}>
             <View style={styles.menuItemLeft}>
-              <View style={[styles.menuIcon, { backgroundColor: '#FEF3C7' }]}>
+              <View style={[styles.menuIcon, { backgroundColor: timeTheme.isDark ? '#451A03' : '#FEF3C7' }]}>
                 <Ionicons name="lock-closed-outline" size={18} color="#D97706" />
               </View>
               <View>
-                <Text style={styles.menuText}>Change Password</Text>
-                <Text style={styles.menuSubText}>Update your MediRem login password</Text>
+                <Text style={[styles.menuText, { color: timeTheme.colors.textPrimary }]}>Change Password</Text>
+                <Text style={[styles.menuSubText, { color: timeTheme.colors.textSecondary }]}>Update your MediRem login password</Text>
               </View>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.menuItem}
+            style={[styles.menuItem, { borderBottomColor: 'transparent' }]}
             activeOpacity={0.7}
             onPress={() => Alert.alert('Security Info', `Account ID: ${userProfile?.id || 'Local'}\n${formatJoinedDate(userProfile?.createdAt)}`)}>
             <View style={styles.menuItemLeft}>
-              <View style={[styles.menuIcon, { backgroundColor: '#DCFCE7' }]}>
+              <View style={[styles.menuIcon, { backgroundColor: timeTheme.isDark ? '#064E3B' : '#DCFCE7' }]}>
                 <Ionicons name="shield-checkmark-outline" size={18} color="#10B981" />
               </View>
               <View>
-                <Text style={styles.menuText}>Security & Database Sync</Text>
-                <Text style={styles.menuSubText}>{formatJoinedDate(userProfile?.createdAt)}</Text>
+                <Text style={[styles.menuText, { color: timeTheme.colors.textPrimary }]}>Security & Database Sync</Text>
+                <Text style={[styles.menuSubText, { color: timeTheme.colors.textSecondary }]}>{formatJoinedDate(userProfile?.createdAt)}</Text>
               </View>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
@@ -866,8 +876,10 @@ export default function ProfileScreen() {
         {/* Section: Medication Alarms & Ringtones (Full CRUD Management) */}
         <View style={styles.sectionHeaderRow}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.sectionHeaderTitle}>Alarms & Ringtones</Text>
-            <Text style={styles.sectionHeaderSub}>
+            <Text style={[styles.sectionHeaderTitle, { color: timeTheme.colors.textPrimary }]}>
+              Alarms & Ringtones
+            </Text>
+            <Text style={[styles.sectionHeaderSub, { color: timeTheme.colors.textSecondary }]}>
               Choose active alarm sound & manage custom tones
             </Text>
           </View>
@@ -882,7 +894,14 @@ export default function ProfileScreen() {
         </View>
 
         {/* Active Ringtone Quick Banner */}
-        <View style={styles.activeToneBanner}>
+        <View
+          style={[
+            styles.activeToneBanner,
+            {
+              backgroundColor: timeTheme.colors.card,
+              borderColor: timeTheme.colors.cardBorder,
+            },
+          ]}>
           <View style={styles.activeToneLeft}>
             <View style={[styles.activeToneIconBadge, { backgroundColor: currentRingtone.color + '20' }]}>
               <Ionicons
@@ -893,7 +912,12 @@ export default function ProfileScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                <Text style={styles.activeToneTitle} numberOfLines={1}>
+                <Text
+                  style={[
+                    styles.activeToneTitle,
+                    { color: timeTheme.colors.textPrimary },
+                  ]}
+                  numberOfLines={1}>
                   {currentRingtone.name}
                 </Text>
                 <View style={styles.activeArmedBadge}>
@@ -901,7 +925,12 @@ export default function ProfileScreen() {
                   <Text style={styles.activeArmedText}>Active Tone</Text>
                 </View>
               </View>
-              <Text style={styles.activeToneSub} numberOfLines={1}>
+              <Text
+                style={[
+                  styles.activeToneSub,
+                  { color: timeTheme.colors.textSecondary },
+                ]}
+                numberOfLines={1}>
                 {currentRingtone.description}
               </Text>
             </View>
@@ -910,6 +939,10 @@ export default function ProfileScreen() {
           <TouchableOpacity
             style={[
               styles.previewActiveBtn,
+              {
+                backgroundColor: timeTheme.colors.surfaceBg,
+                borderColor: timeTheme.colors.cardBorder,
+              },
               playingRingtoneId === currentRingtone.id && styles.previewActiveBtnPlaying,
             ]}
             onPress={() => handleTogglePreview(currentRingtone.soundUrl, currentRingtone.id)}
@@ -938,7 +971,14 @@ export default function ProfileScreen() {
               borderColor: timeTheme.colors.cardBorder,
             },
           ]}>
-          <View style={styles.ringtonesCardHeader}>
+          <View
+            style={[
+              styles.ringtonesCardHeader,
+              {
+                backgroundColor: timeTheme.colors.surfaceBg,
+                borderBottomColor: timeTheme.colors.cardBorder,
+              },
+            ]}>
             <Text style={[styles.ringtonesCardHeaderTitle, { color: timeTheme.colors.textPrimary }]}>
               Available Ringtones ({ringtonesList.length})
             </Text>
@@ -956,7 +996,12 @@ export default function ProfileScreen() {
                 key={ringtone.id}
                 style={[
                   styles.ringtoneRow,
-                  isCurrent && styles.ringtoneRowActive,
+                  {
+                    backgroundColor: isCurrent
+                      ? (timeTheme.isDark ? '#1E293B80' : '#F0F9FF')
+                      : timeTheme.colors.card,
+                    borderBottomColor: timeTheme.colors.cardBorder,
+                  },
                   index < ringtonesList.length - 1 && styles.ringtoneRowBorder,
                 ]}>
                 {/* Radio / Selection Indicator */}
@@ -985,6 +1030,7 @@ export default function ProfileScreen() {
                       <Text
                         style={[
                           styles.ringtoneNameText,
+                          { color: timeTheme.colors.textPrimary },
                           isCurrent && styles.ringtoneNameTextActive,
                         ]}
                         numberOfLines={1}>
@@ -1001,7 +1047,12 @@ export default function ProfileScreen() {
                         </View>
                       )}
                     </View>
-                    <Text style={styles.ringtoneDescText} numberOfLines={1}>
+                    <Text
+                      style={[
+                        styles.ringtoneDescText,
+                        { color: timeTheme.colors.textSecondary },
+                      ]}
+                      numberOfLines={1}>
                       {ringtone.description}
                     </Text>
                     <View style={styles.vibrationTagRow}>
@@ -1019,6 +1070,10 @@ export default function ProfileScreen() {
                   <TouchableOpacity
                     style={[
                       styles.actionIconBtn,
+                      {
+                        backgroundColor: timeTheme.colors.surfaceBg,
+                        borderColor: timeTheme.colors.cardBorder,
+                      },
                       isPlayingThis && styles.actionIconBtnPlaying,
                     ]}
                     onPress={() => handleTogglePreview(ringtone.soundUrl, ringtone.id)}
@@ -1034,7 +1089,13 @@ export default function ProfileScreen() {
                   {/* Edit Custom Button */}
                   {ringtone.isCustom && (
                     <TouchableOpacity
-                      style={styles.actionIconBtn}
+                      style={[
+                        styles.actionIconBtn,
+                        {
+                          backgroundColor: timeTheme.colors.surfaceBg,
+                          borderColor: timeTheme.colors.cardBorder,
+                        },
+                      ]}
                       onPress={() => openEditRingtoneModal(ringtone)}
                       activeOpacity={0.7}
                       accessibilityLabel="Edit ringtone">
@@ -1068,12 +1129,12 @@ export default function ProfileScreen() {
               borderColor: timeTheme.colors.cardBorder,
             },
           ]}>
-          <View style={styles.menuItem}>
+          <View style={[styles.menuItem, { borderBottomColor: timeTheme.colors.cardBorder }]}>
             <View style={styles.menuItemLeft}>
-              <View style={styles.menuIcon}>
+              <View style={[styles.menuIcon, { backgroundColor: timeTheme.isDark ? '#1E293B' : '#E6F4FE' }]}>
                 <Ionicons name="notifications-outline" size={18} color="#208AEF" />
               </View>
-              <Text style={styles.menuText}>Loud Alarm Notifications</Text>
+              <Text style={[styles.menuText, { color: timeTheme.colors.textPrimary }]}>Loud Alarm Notifications</Text>
             </View>
             <Switch
               value={notificationsEnabled}
@@ -1083,12 +1144,12 @@ export default function ProfileScreen() {
             />
           </View>
 
-          <View style={styles.menuItem}>
+          <View style={[styles.menuItem, { borderBottomColor: timeTheme.colors.cardBorder }]}>
             <View style={styles.menuItemLeft}>
-              <View style={[styles.menuIcon, { backgroundColor: '#F3E8FF' }]}>
+              <View style={[styles.menuIcon, { backgroundColor: timeTheme.isDark ? '#2E1065' : '#F3E8FF' }]}>
                 <Ionicons name="phone-portrait-outline" size={18} color="#9333EA" />
               </View>
-              <Text style={styles.menuText}>Alarm Vibration</Text>
+              <Text style={[styles.menuText, { color: timeTheme.colors.textPrimary }]}>Alarm Vibration</Text>
             </View>
             <Switch
               value={isVibrationActive}
@@ -1101,14 +1162,14 @@ export default function ProfileScreen() {
           </View>
 
           {/* Voice Alert Setting */}
-          <View style={styles.menuItem}>
+          <View style={[styles.menuItem, { borderBottomColor: timeTheme.colors.cardBorder }]}>
             <View style={styles.menuItemLeft}>
-              <View style={[styles.menuIcon, { backgroundColor: '#ECFDF5' }]}>
+              <View style={[styles.menuIcon, { backgroundColor: timeTheme.isDark ? '#064E3B' : '#ECFDF5' }]}>
                 <Ionicons name="mic" size={18} color="#059669" />
               </View>
               <View style={{ flex: 1, paddingRight: 6 }}>
-                <Text style={styles.menuText}>Spoken Medicine Voice Alert</Text>
-                <Text style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>
+                <Text style={[styles.menuText, { color: timeTheme.colors.textPrimary }]}>Spoken Medicine Voice Alert</Text>
+                <Text style={[styles.menuSubText, { color: timeTheme.colors.textSecondary }]}>
                   Speaks &quot;Take your medicine [Name]!&quot; repeatedly during alarm
                 </Text>
               </View>
@@ -1129,7 +1190,7 @@ export default function ProfileScreen() {
                   paddingHorizontal: 8,
                   paddingVertical: 5,
                   borderRadius: 8,
-                  backgroundColor: isPlayingVoicePreview ? '#FEE2E2' : '#F1F5F9',
+                  backgroundColor: isPlayingVoicePreview ? '#FEE2E2' : (timeTheme.isDark ? '#1E293B' : '#F1F5F9'),
                 }}
                 accessibilityLabel="Test Voice Alert">
                 <Ionicons
@@ -1151,21 +1212,21 @@ export default function ProfileScreen() {
           </View>
 
           <TouchableOpacity
-            style={styles.menuItem}
+            style={[styles.menuItem, { borderBottomColor: timeTheme.colors.cardBorder }]}
             activeOpacity={0.7}
             onPress={() => router.push('/(tabs)/meds')}>
             <View style={styles.menuItemLeft}>
-              <View style={[styles.menuIcon, { backgroundColor: '#FEF3C7' }]}>
+              <View style={[styles.menuIcon, { backgroundColor: timeTheme.isDark ? '#451A03' : '#FEF3C7' }]}>
                 <MaterialCommunityIcons name="pill" size={18} color="#F59E0B" />
               </View>
-              <Text style={styles.menuText}>Manage Medications ({medicationsCount})</Text>
+              <Text style={[styles.menuText, { color: timeTheme.colors.textPrimary }]}>Manage Medications ({medicationsCount})</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
           </TouchableOpacity>
 
           {/* Dynamic Day & Night Theme Setting */}
           <TouchableOpacity
-            style={styles.menuItem}
+            style={[styles.menuItem, { borderBottomColor: 'transparent' }]}
             activeOpacity={0.75}
             onPress={handleCycleTheme}>
             <View style={styles.menuItemLeft}>
@@ -1173,8 +1234,8 @@ export default function ProfileScreen() {
                 <Ionicons name={timeTheme.iconName} size={18} color={timeTheme.iconColor} />
               </View>
               <View style={{ flex: 1, paddingRight: 6 }}>
-                <Text style={styles.menuText}>Day & Night Theme Mode</Text>
-                <Text style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>
+                <Text style={[styles.menuText, { color: timeTheme.colors.textPrimary }]}>Day & Night Theme Mode</Text>
+                <Text style={[styles.menuSubText, { color: timeTheme.colors.textSecondary }]}>
                   {themePref === 'auto'
                     ? `Auto: ${timeTheme.greetingText} (${timeTheme.emoji})`
                     : themePref === 'light'
@@ -1964,12 +2025,14 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   header: {
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   headerTitle: {
     fontSize: 24,
@@ -2014,7 +2077,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
     marginBottom: 16,
     shadowColor: '#0F172A',
     shadowOpacity: 0.04,
@@ -2073,7 +2135,6 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 17,
     fontWeight: '800',
-    color: '#0F172A',
     flexShrink: 1,
   },
   roleBadge: {
@@ -2167,7 +2228,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    backgroundColor: '#FFFFFF',
     borderRadius: 18,
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
@@ -2208,7 +2268,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
   menuGroup: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 18,
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
@@ -2222,7 +2281,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: '#E2E8F0',
   },
   menuItemLeft: {
     flexDirection: 'row',
@@ -2241,7 +2300,6 @@ const styles = StyleSheet.create({
   menuText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#0F172A',
   },
   menuSubText: {
     fontSize: 12,
@@ -2255,7 +2313,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 16,
     borderRadius: 18,
-    backgroundColor: '#F8FAFC',
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
   },
@@ -2781,7 +2838,6 @@ const styles = StyleSheet.create({
   sectionHeaderTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#0F172A',
   },
   sectionHeaderSub: {
     fontSize: 12,
@@ -2809,7 +2865,6 @@ const styles = StyleSheet.create({
   activeToneBanner: {
     marginHorizontal: 20,
     marginBottom: 12,
-    backgroundColor: '#F0F9FF',
     borderRadius: 16,
     padding: 14,
     borderWidth: 1.5,
@@ -2834,7 +2889,6 @@ const styles = StyleSheet.create({
   activeToneTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#0F172A',
   },
   activeArmedBadge: {
     flexDirection: 'row',
@@ -2858,7 +2912,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: '#FFFFFF',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 12,
@@ -2880,7 +2933,6 @@ const styles = StyleSheet.create({
   ringtonesCard: {
     marginHorizontal: 20,
     marginBottom: 16,
-    backgroundColor: '#FFFFFF',
     borderRadius: 18,
     borderWidth: 1,
     borderColor: '#E2E8F0',
@@ -2893,14 +2945,12 @@ const styles = StyleSheet.create({
   ringtonesCardHeader: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#F8FAFC',
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: '#E2E8F0',
   },
   ringtonesCardHeaderTitle: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#1E293B',
   },
   ringtonesCardHeaderSub: {
     fontSize: 11,
@@ -2913,14 +2963,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 12,
     paddingHorizontal: 14,
-    backgroundColor: '#FFFFFF',
   },
   ringtoneRowActive: {
-    backgroundColor: '#F0F9FF',
   },
   ringtoneRowBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: '#E2E8F0',
   },
   ringtoneSelectArea: {
     flexDirection: 'row',
@@ -2956,10 +3004,9 @@ const styles = StyleSheet.create({
   ringtoneNameText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#1E293B',
   },
   ringtoneNameTextActive: {
-    color: '#0369A1',
+    color: '#208AEF',
     fontWeight: '800',
   },
   customPill: {
