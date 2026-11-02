@@ -13,6 +13,7 @@ import { getUserSession } from '@/utils/authStorage';
 
 import { Colors } from '@/constants/theme';
 import { initializeNotificationService } from '@/utils/notifications';
+import { syncOfflineQueue } from '@/utils/offlineSync';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -40,6 +41,9 @@ function SessionRestoreGate({ children }: { children: React.ReactNode }) {
                 // safe fallback if navigator still mounting
               }
             }, 0);
+
+            // Attempt silent background synchronization of any pending offline actions
+            syncOfflineQueue(session.token).catch(() => {});
           } else {
             dispatch(setSessionChecked());
           }
@@ -57,8 +61,14 @@ function SessionRestoreGate({ children }: { children: React.ReactNode }) {
       }
     })();
 
+    // Background timer to flush offline sync queue every 30 seconds when online
+    const syncInterval = setInterval(() => {
+      syncOfflineQueue().catch(() => {});
+    }, 30000);
+
     return () => {
       active = false;
+      clearInterval(syncInterval);
     };
   }, [dispatch]);
 

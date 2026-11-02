@@ -21,6 +21,13 @@ import {
 import { useAppSelector } from '@/redux/hooks';
 import { selectCurrentUser } from '@/redux/slices/authSlice';
 import { useGetMedicationsQuery, useTakeDoseMutation } from '@/redux';
+import {
+  getCachedMedications,
+  takeDoseLocally,
+  enqueueOfflineAction,
+  syncOfflineQueue,
+  checkIsOnline,
+} from '@/utils/offlineSync';
 
 interface DoseItem {
   id: string;
@@ -130,19 +137,43 @@ export default function HomeScreen() {
     refetchOnMountOrArgChange: true,
   });
 
+  const authToken = useAppSelector((state) => state.auth.token);
   const [takeDoseMutation] = useTakeDoseMutation();
 
   const [takenIds, setTakenIds] = useState<Set<string>>(() => new Set());
   const [currentTime, setCurrentTime] = useState(() => new Date());
+  const [cachedMeds, setCachedMeds] = useState<any[]>([]);
+  const [isOnlineState, setIsOnlineState] = useState(true);
 
-  // Dynamically derive today's dose cards directly from Neon database rows
-  // Supports multiple doses per day (e.g. 1, 2, 3 times daily: Morning, Noon, Night):
-  // 1. Expands every medication into its scheduled daily time slots
-  // 2. Checks if taken today in Neon DB doseLogs or local intake for that specific dose slot
-  // 3. Checks inventory (pillsLeft) -> marks out of stock
-  // 4. Checks schedule days of week & dates -> sets isScheduledToday
+  // Load offline cached medications on mount & sync queue when online
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const online = await checkIsOnline();
+      if (active) setIsOnlineState(online);
+
+      const local = await getCachedMedications(activeUserId || 'default');
+      if (active && local && local.length > 0) {
+        setCachedMeds(local);
+      }
+
+      if (online) {
+        syncOfflineQueue(authToken).then((res) => {
+          if (res.synced > 0) {
+            refetchMeds();
+          }
+        });
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [activeUserId, authToken, refetchMeds]);
+
+  // Dynamically derive today's dose cards directly from Neon database rows or offline cache
   const doses: DoseItem[] = useMemo(() => {
-    const list = dbMeds || [];
+    const list = (dbMeds && dbMeds.length > 0) ? dbMeds : cachedMeds;
     const items: DoseItem[] = [];
 
     list.forEach((item: any) => {
@@ -173,7 +204,7 @@ export default function HomeScreen() {
     });
 
     return items;
-  }, [dbMeds, takenIds, currentTime]);
+  }, [dbMeds, cachedMeds, takenIds, currentTime]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -238,12 +269,18 @@ export default function HomeScreen() {
     const alarmKey = `today_${id}_${currentTime.toDateString()}`;
     todayAlarmedRef.current.add(alarmKey);
 
-    // 3. Persist intake and decrement pill count in Neon Cloud PostgreSQL
+    // 3. Persist intake locally and in Neon Cloud PostgreSQL (offline-first)
     if (!isCurrentlyTaken) {
+      await takeDoseLocally(activeUserId || 'default', medId);
       try {
         await takeDoseMutation({ id: medId, scheduledTime }).unwrap();
-      } catch (e) {
-        console.warn('Take dose DB call error:', e);
+      } catch {
+        await enqueueOfflineAction({
+          type: 'TAKE_DOSE',
+          payload: { id: medId, scheduledTime },
+          userId: activeUserId,
+          userEmail: user?.email,
+        });
       }
     }
   };
@@ -301,9 +338,40 @@ export default function HomeScreen() {
               <Ionicons name="person" size={20} color="#208AEF" />
             </View>
             <View className="justify-center">
-              <Text className="text-xs font-medium text-slate-500 dark:text-slate-400" style={styles.userSubtitle}>
-                Good Morning, ☀️
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text className="text-xs font-medium text-slate-500 dark:text-slate-400" style={styles.userSubtitle}>
+                  Good Morning, ☀️
+                </Text>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 3,
+                    paddingHorizontal: 6,
+                    paddingVertical: 1,
+                    borderRadius: 8,
+                    backgroundColor: isOnlineState ? '#ECFDF5' : '#FEF3C7',
+                    borderWidth: 1,
+                    borderColor: isOnlineState ? '#A7F3D0' : '#FDE68A',
+                  }}>
+                  <View
+                    style={{
+                      width: 5,
+                      height: 5,
+                      borderRadius: 2.5,
+                      backgroundColor: isOnlineState ? '#10B981' : '#D97706',
+                    }}
+                  />
+                  <Text
+                    style={{
+                      fontSize: 9,
+                      fontWeight: '700',
+                      color: isOnlineState ? '#059669' : '#B45309',
+                    }}>
+                    {isOnlineState ? 'Cloud' : 'Offline'}
+                  </Text>
+                </View>
+              </View>
               <Text className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight" style={styles.userName}>
                 {user?.name || 'Friend'}
               </Text>

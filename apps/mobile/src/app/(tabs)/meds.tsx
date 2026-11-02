@@ -42,6 +42,17 @@ import {
   useTakeDoseMutation,
 } from '@/redux';
 import { useAppSelector } from '@/redux/hooks';
+import {
+  getCachedMedications,
+  setCachedMedications,
+  saveLocalMedication,
+  updateLocalMedication,
+  deleteLocalMedication,
+  takeDoseLocally,
+  enqueueOfflineAction,
+  syncOfflineQueue,
+  checkIsOnline,
+} from '@/utils/offlineSync';
 
 interface Medication {
   id: string;
@@ -274,6 +285,7 @@ function getRoutineDurationInfo(startDateStr?: string, endDateStr?: string): {
 export default function MedsScreen() {
   const authUser = useAppSelector((state) => state.auth.user);
   const activeUserId = authUser?.id;
+  const authToken = useAppSelector((state) => state.auth.token);
 
   // Real data direct from Neon Cloud PostgreSQL
   const {
@@ -292,10 +304,44 @@ export default function MedsScreen() {
   const [localOverrides, setLocalOverrides] = useState<Record<string, Partial<Medication>>>({});
   const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set());
   const [createdMeds, setCreatedMeds] = useState<Medication[]>([]);
+  const [cachedMeds, setCachedMeds] = useState<any[]>([]);
+  const [isOnlineState, setIsOnlineState] = useState(true);
 
-  // Dynamically derive medications list directly from Neon database rows (strictly deduplicated by ID)
+  // Load offline cached medications on mount & sync queue when online
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const online = await checkIsOnline();
+      if (active) setIsOnlineState(online);
+
+      const cached = await getCachedMedications(activeUserId || 'default');
+      if (active && cached && cached.length > 0) {
+        setCachedMeds(cached);
+      }
+
+      if (online) {
+        const res = await syncOfflineQueue(authToken);
+        if (res.synced > 0) {
+          refetchMeds();
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [activeUserId, authToken, refetchMeds]);
+
+  // Update cached medications whenever dbMeds arrives from Neon
+  useEffect(() => {
+    if (activeUserId && dbMeds && dbMeds.length > 0) {
+      setCachedMedications(activeUserId, dbMeds as any);
+    }
+  }, [activeUserId, dbMeds]);
+
+  // Dynamically derive medications list directly from Neon database rows or offline cache (strictly deduplicated by ID)
   const meds: Medication[] = useMemo(() => {
-    const sourceList = dbMeds || [];
+    const sourceList = (dbMeds && dbMeds.length > 0) ? dbMeds : cachedMeds;
     const map = new Map<string, Medication>();
 
     // 1. Add database medications first
@@ -351,7 +397,7 @@ export default function MedsScreen() {
       });
 
     return Array.from(map.values());
-  }, [dbMeds, localOverrides, deletedIds, createdMeds, activeUserId]);
+  }, [dbMeds, cachedMeds, localOverrides, deletedIds, createdMeds, activeUserId]);
 
   const [filter, setFilter] = useState<'all' | 'active' | 'paused'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -588,11 +634,17 @@ export default function MedsScreen() {
     setIsAlarmModalVisible(false);
     setActiveAlarmMed(null);
 
-    // Save intake and decrement inventory in Neon Cloud PostgreSQL
+    // Save intake locally and decrement inventory (offline-first)
+    await takeDoseLocally(activeUserId || 'default', med.id);
     try {
       await takeDoseMutation(med.id).unwrap();
-    } catch (e) {
-      console.warn('Take dose DB call note:', e);
+    } catch {
+      await enqueueOfflineAction({
+        type: 'TAKE_DOSE',
+        payload: { id: med.id, scheduledTime: med.time },
+        userId: activeUserId,
+        userEmail: authUser?.email,
+      });
     }
 
     setLocalOverrides((prev) => {
@@ -802,14 +854,21 @@ export default function MedsScreen() {
               await cancelMedicationReminder(med.notificationId);
             }
 
-            // Remove from medications local state
+            // Remove from medications local state & offline cache
             setDeletedIds((prev) => new Set(prev).add(med.id));
+            setCreatedMeds((prev) => prev.filter((m) => m.id !== med.id));
+            await deleteLocalMedication(activeUserId || 'default', med.id);
 
             // Delete from Neon Cloud PostgreSQL
             try {
               await deleteMedication(med.id).unwrap();
-            } catch (e) {
-              console.warn('Delete in Neon DB error:', e);
+            } catch {
+              await enqueueOfflineAction({
+                type: 'DELETE_MEDICATION',
+                payload: { id: med.id },
+                userId: activeUserId,
+                userEmail: authUser?.email,
+              });
             }
 
             Alert.alert(
@@ -869,83 +928,94 @@ export default function MedsScreen() {
       }
     }
 
+    const localNewMed: Medication = {
+      id: newMedId,
+      name: name.trim(),
+      dosage: dosage.trim() || '1 tablet',
+      instructions: instructions.trim() || 'After food',
+      frequency: frequencyLabel,
+      selectedDays: frequencyType === 'specific' ? selectedDays : undefined,
+      startDate: finalStartDate,
+      endDate: finalEndDate,
+      time: finalTime,
+      timeSlot: finalSlot,
+      times: timesJson,
+      nextDose: `Today, ${finalTime}`,
+      pillsLeft: totalPillsParsed,
+      totalPills: totalPillsParsed,
+      imageUri: imageUri ?? undefined,
+      status: 'active',
+      alarmEnabled,
+      notificationId,
+      userId: activeUserId,
+    };
+
+    // 1. Immediately save to local phone cache & update UI state (works 100% offline!)
+    await saveLocalMedication(activeUserId || 'default', localNewMed);
+    setCreatedMeds((prev) => [localNewMed, ...prev.filter((m) => m.id !== newMedId)]);
+
+    // 2. Reset form & close modal immediately
+    setName('');
+    setDosage('');
+    setInstructions('');
+    setPillsCount('30');
+    setImageUri(null);
+    setFrequencyType('everyday');
+    setIsAddModalOpen(false);
+
+    // 3. Prepare payload for Cloud Sync
+    const createPayload = {
+      name: name.trim(),
+      dosage: dosage.trim() || '1 tablet',
+      instructions: instructions.trim() || 'After food',
+      frequency: frequencyLabel,
+      selectedDays: frequencyType === 'specific' ? JSON.stringify(selectedDays) : undefined,
+      startDate: finalStartDate,
+      endDate: finalEndDate,
+      time: finalTime,
+      timeSlot: finalSlot,
+      times: timesJson,
+      pillsLeft: totalPillsParsed,
+      totalPills: totalPillsParsed,
+      imageUri: imageUri ?? undefined,
+      status: 'active' as const,
+      alarmEnabled,
+      notificationId,
+      userId: activeUserId,
+      userEmail: authUser?.email,
+    };
+
     try {
-      const created = await createMedication({
-        name: name.trim(),
-        dosage: dosage.trim() || '1 tablet',
-        instructions: instructions.trim() || 'After food',
-        frequency: frequencyLabel,
-        selectedDays: frequencyType === 'specific' ? JSON.stringify(selectedDays) : undefined,
-        startDate: finalStartDate,
-        endDate: finalEndDate,
-        time: finalTime,
-        timeSlot: finalSlot,
-        times: timesJson,
-        pillsLeft: totalPillsParsed,
-        totalPills: totalPillsParsed,
-        imageUri: imageUri ?? undefined,
-        status: 'active',
-        alarmEnabled,
-        notificationId,
+      const created = await createMedication(createPayload).unwrap();
+      // Replace temporary local ID with server ID
+      setCreatedMeds((prev) => [
+        { ...localNewMed, id: created.id },
+        ...prev.filter((m) => m.id !== newMedId && m.id !== created.id),
+      ]);
+      await saveLocalMedication(activeUserId || 'default', { ...localNewMed, id: created.id });
+
+      Alert.alert(
+        'Medication & Alarm Active! 🔔',
+        `"${name.trim()} (${dosage.trim() || '1 tablet'})" is scheduled for ${finalTime} and synced to your database.\n\n📅 Duration: ${finalStartDate} → ${finalEndDate}`
+      );
+    } catch {
+      // Offline fallback: Queue action for background sync when internet connects!
+      await enqueueOfflineAction({
+        type: 'CREATE_MEDICATION',
+        payload: createPayload,
         userId: activeUserId,
         userEmail: authUser?.email,
-      }).unwrap();
-
-      const newMed: Medication = {
-        id: created.id,
-        name: created.name,
-        dosage: created.dosage,
-        instructions: created.instructions || 'After food',
-        frequency: created.frequency || frequencyLabel,
-        selectedDays: frequencyType === 'specific' ? selectedDays : undefined,
-        startDate: finalStartDate,
-        endDate: finalEndDate,
-        time: finalTime,
-        timeSlot: finalSlot,
-        times: timesJson,
-        nextDose: `Today, ${finalTime}`,
-        pillsLeft: totalPillsParsed,
-        totalPills: totalPillsParsed,
-        imageUri: imageUri ?? undefined,
-        status: 'active',
-        alarmEnabled,
-        notificationId,
-      };
-
-      setCreatedMeds((prev) => [newMed, ...prev.filter((m) => m.id !== created.id)]);
-
-      // Reset form
-      setName('');
-      setDosage('');
-      setInstructions('');
-      setPillsCount('30');
-      setImageUri(null);
-      setFrequencyType('everyday');
-      setIsAddModalOpen(false);
+        tempMedId: newMedId,
+      });
 
       Alert.alert(
-        'Medication Saved to Database! 🎉',
-        `"${created.name}" is now saved to your Neon Cloud Database (ID: ${created.id.slice(0, 8)}...).`
-      );
-    } catch (e: any) {
-      console.error('Create medication in Neon DB error:', e);
-      Alert.alert('Save Error', e?.data?.message || 'Could not save medication to database.');
-    }
-
-    if (alarmEnabled) {
-      Alert.alert(
-        'Medication & Alarm Scheduled! 🔔',
-        `"${name.trim()} (${dosage.trim() || '1 tablet'})" is scheduled for ${finalTime}.\n\n📅 Duration: ${finalStartDate} → ${finalEndDate}\n🔔 Push notification alarm is set.`
-      );
-    } else {
-      Alert.alert(
-        'Medication Saved!',
-        `"${name.trim()}" added to your medication routine.`
+        'Medication & Alarm Active Offline! 🔔',
+        `"${name.trim()} (${dosage.trim() || '1 tablet'})" is armed on your device clock!\n\n⏰ Alarm Time: ${finalTime}\n\n✅ Sound, vibration & spoken voice reminders will ring on time without internet!\n☁️ Will automatically sync to database when internet reconnects.`
       );
     }
   };
 
-  const togglePause = (id: string) => {
+  const togglePause = async (id: string) => {
     const target = meds.find((m) => m.id === id);
     const nextStatus = target?.status === 'active' ? 'paused' : 'active';
     setLocalOverrides((prev) => ({
@@ -955,7 +1025,17 @@ export default function MedsScreen() {
         status: nextStatus,
       },
     }));
-    updateMedication({ id, data: { status: nextStatus } }).unwrap().catch(console.warn);
+    await updateLocalMedication(activeUserId || 'default', id, { status: nextStatus });
+    try {
+      await updateMedication({ id, data: { status: nextStatus } }).unwrap();
+    } catch {
+      await enqueueOfflineAction({
+        type: 'UPDATE_MEDICATION',
+        payload: { id, data: { status: nextStatus } },
+        userId: activeUserId,
+        userEmail: authUser?.email,
+      });
+    }
   };
 
   return (
@@ -970,9 +1050,40 @@ export default function MedsScreen() {
               resizeMode="contain"
             />
             <View>
-              <Text className="text-2xl font-black text-slate-900 dark:text-white" style={styles.title}>
-                My Medications
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text className="text-2xl font-black text-slate-900 dark:text-white" style={styles.title}>
+                  My Medications
+                </Text>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 4,
+                    paddingHorizontal: 7,
+                    paddingVertical: 2,
+                    borderRadius: 10,
+                    backgroundColor: isOnlineState ? '#ECFDF5' : '#FEF3C7',
+                    borderWidth: 1,
+                    borderColor: isOnlineState ? '#A7F3D0' : '#FDE68A',
+                  }}>
+                  <View
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: 3,
+                      backgroundColor: isOnlineState ? '#10B981' : '#D97706',
+                    }}
+                  />
+                  <Text
+                    style={{
+                      fontSize: 10,
+                      fontWeight: '700',
+                      color: isOnlineState ? '#059669' : '#B45309',
+                    }}>
+                    {isOnlineState ? 'Cloud Synced' : 'Offline (Alarm Active)'}
+                  </Text>
+                </View>
+              </View>
               <Text className="text-xs text-slate-400" style={styles.subtitle}>
                 {meds.filter((m) => m.status === 'active').length} active routines
               </Text>
