@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Alert } from 'react-native';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import { setThemePreference } from '@/redux/slices/themeSlice';
 import {
@@ -47,19 +46,6 @@ export function useAppTheme() {
 
     dispatch(setThemePreference(nextPref));
     await saveThemePreference(nextPref);
-
-    const modeLabels: Record<ThemePreference, string> = {
-      auto: 'Automatic 🕒 (Morning ☀️, Noon 🌤️, Evening 🌇, Night 🌙)',
-      light: 'Light Theme ☀️ (Daytime Light)',
-      evening: 'Twilight Theme 🌇 (Soft Evening Dark)',
-      dark: 'Dark Theme 🌙 (Full Night Dark)',
-    };
-
-    Alert.alert(
-      'Theme Mode Changed',
-      `Active theme: ${modeLabels[nextPref]}\n\nTheme updates instantly across all screens (Home, Meds, AI Bot, History, Profile).`,
-      [{ text: 'OK' }],
-    );
   }, [themePref, dispatch]);
 
   return {
