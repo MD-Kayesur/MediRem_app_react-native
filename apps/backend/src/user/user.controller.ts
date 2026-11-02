@@ -115,6 +115,48 @@ export class UserController {
   }
 
   /**
+   * 2b. POST /api/user/change-password - Change Current User Password
+   */
+  @Post('change-password')
+  @ApiOperation({
+    summary: '🔒 [User] Change current user password',
+    description: 'Verifies current password and updates to a new password in Neon Cloud DB.',
+  })
+  @ApiHeader({
+    name: 'x-user-id',
+    required: false,
+    description: 'Current user UUID',
+  })
+  @ApiHeader({
+    name: 'x-user-email',
+    required: false,
+    description: 'Current user email',
+  })
+  @ApiQuery({
+    name: 'userId',
+    required: false,
+    description: 'User UUID override',
+  })
+  @ApiQuery({
+    name: 'userEmail',
+    required: false,
+    description: 'User email override',
+  })
+  @ApiResponse({ status: 200, description: 'Password changed successfully.' })
+  @ApiResponse({ status: 400, description: 'Invalid current password or new password too short.' })
+  changePassword(
+    @Body() body: { currentPassword?: string; newPassword: string },
+    @Headers('x-user-id') headerUserId?: string,
+    @Headers('x-user-email') headerUserEmail?: string,
+    @Query('userId') queryUserId?: string,
+    @Query('userEmail') queryUserEmail?: string,
+  ) {
+    const activeUserId = headerUserId || queryUserId;
+    const activeUserEmail = headerUserEmail || queryUserEmail;
+    return this.userService.changePassword(activeUserId, activeUserEmail, body);
+  }
+
+  /**
    * 3. GET /api/user - [Admin Only] All Users List
    */
   @Get()

@@ -78,6 +78,28 @@ export const userApi = apiSlice.injectEndpoints({
       invalidatesTags: ['User'],
     }),
 
+    changePassword: builder.mutation<
+      { success: boolean; message: string },
+      { userId?: string; userEmail?: string; currentPassword?: string; newPassword: string }
+    >({
+      query: ({ userId, userEmail, ...body }) => {
+        const headers: Record<string, string> = {};
+        if (userId) headers['x-user-id'] = userId;
+        if (userEmail) headers['x-user-email'] = userEmail;
+        return {
+          url: '/user/change-password',
+          method: 'POST',
+          headers,
+          params: {
+            ...(userId ? { userId } : {}),
+            ...(userEmail ? { userEmail } : {}),
+          },
+          body,
+        };
+      },
+      invalidatesTags: ['User'],
+    }),
+
     getAllUsers: builder.query<UsersListResponse, { adminId?: string; adminEmail?: string } | void>({
       query: (arg) => {
         const headers: Record<string, string> = {};
@@ -105,6 +127,7 @@ export const userApi = apiSlice.injectEndpoints({
 export const {
   useGetMeQuery,
   useUpdateMeMutation,
+  useChangePasswordMutation,
   useGetAllUsersQuery,
   useGetUserByIdQuery,
 } = userApi;

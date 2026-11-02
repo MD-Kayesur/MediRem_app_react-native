@@ -16,9 +16,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import {
   useGetMeQuery,
   useUpdateMeMutation,
+  useChangePasswordMutation,
   useGetAllUsersQuery,
   logout,
   apiSlice,
@@ -101,6 +103,15 @@ const VIBRATION_OPTIONS: { id: 'urgent' | 'standard' | 'gentle' | 'heartbeat'; l
   { id: 'heartbeat', label: 'Heartbeat', desc: 'Double thump rhythm' },
 ];
 
+const PRESET_AVATARS = [
+  { id: 'avatar-doc', label: 'Doctor', uri: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=250&q=80' },
+  { id: 'avatar-nurse', label: 'Nurse', uri: 'https://images.unsplash.com/photo-1594824813571-638f026385a7?auto=format&fit=crop&w=250&q=80' },
+  { id: 'avatar-user-m', label: 'Patient M', uri: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=250&q=80' },
+  { id: 'avatar-user-f', label: 'Patient F', uri: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=250&q=80' },
+  { id: 'avatar-senior', label: 'Senior Care', uri: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=250&q=80' },
+  { id: 'avatar-friendly', label: 'Wellness', uri: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=250&q=80' },
+];
+
 export default function ProfileScreen() {
   const dispatch = useAppDispatch();
   const authStateUser = useAppSelector((state) => state.auth.user);
@@ -123,6 +134,7 @@ export default function ProfileScreen() {
   );
 
   const [updateMe, { isLoading: isUpdatingProfile }] = useUpdateMeMutation();
+  const [changePasswordApi, { isLoading: isChangingPassword }] = useChangePasswordMutation();
 
   const userProfile = profileResponse?.data;
   const displayName = userProfile?.name || authStateUser?.name || 'MediRem User';
@@ -320,6 +332,166 @@ export default function ProfileScreen() {
     }
   };
 
+  // Photo Picker Modal State
+  const [isPhotoModalVisible, setIsPhotoModalVisible] = useState(false);
+  const [customAvatarInput, setCustomAvatarInput] = useState('');
+  const [photoErrorMessage, setPhotoErrorMessage] = useState<string | null>(null);
+
+  const openPhotoModal = () => {
+    setCustomAvatarInput(userProfile?.avatarUrl || '');
+    setPhotoErrorMessage(null);
+    setIsPhotoModalVisible(true);
+  };
+
+  const handlePickFromGallery = async () => {
+    setPhotoErrorMessage(null);
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert(
+          'Permission Needed',
+          'Please allow access to your photos in device settings to select an avatar.'
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.6,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const newAvatar = asset.base64
+          ? `data:image/jpeg;base64,${asset.base64}`
+          : asset.uri;
+
+        await updateMe({
+          userId: activeUserId,
+          userEmail: activeUserEmail,
+          avatarUrl: newAvatar,
+        }).unwrap();
+
+        setIsPhotoModalVisible(false);
+        Alert.alert('Profile Photo Updated! 📸', 'Your photo has been saved to your account.');
+      }
+    } catch (err: any) {
+      setPhotoErrorMessage(
+        err?.data?.message || err?.error || 'Failed to select photo from gallery.'
+      );
+    }
+  };
+
+  const handleSelectPresetAvatar = async (avatarUrl: string) => {
+    setPhotoErrorMessage(null);
+    try {
+      await updateMe({
+        userId: activeUserId,
+        userEmail: activeUserEmail,
+        avatarUrl,
+      }).unwrap();
+      setIsPhotoModalVisible(false);
+      Alert.alert('Avatar Updated! 🌟', 'Your profile avatar was updated successfully.');
+    } catch (err: any) {
+      setPhotoErrorMessage(
+        err?.data?.message || err?.error || 'Failed to update avatar.'
+      );
+    }
+  };
+
+  const handleApplyCustomUrl = async () => {
+    if (!customAvatarInput.trim()) {
+      setPhotoErrorMessage('Please enter an image URL.');
+      return;
+    }
+    setPhotoErrorMessage(null);
+    try {
+      await updateMe({
+        userId: activeUserId,
+        userEmail: activeUserEmail,
+        avatarUrl: customAvatarInput.trim(),
+      }).unwrap();
+      setIsPhotoModalVisible(false);
+      Alert.alert('Photo Updated! 📸', 'Your profile image link has been saved.');
+    } catch (err: any) {
+      setPhotoErrorMessage(
+        err?.data?.message || err?.error || 'Failed to save image URL.'
+      );
+    }
+  };
+
+  const handleRemovePhoto = async () => {
+    setPhotoErrorMessage(null);
+    try {
+      await updateMe({
+        userId: activeUserId,
+        userEmail: activeUserEmail,
+        avatarUrl: '',
+      }).unwrap();
+      setIsPhotoModalVisible(false);
+      Alert.alert('Photo Removed', 'Your profile picture has been reset to default.');
+    } catch (err: any) {
+      setPhotoErrorMessage(
+        err?.data?.message || err?.error || 'Failed to remove photo.'
+      );
+    }
+  };
+
+  // Change Password Modal State
+  const [isPasswordModalVisible, setIsPasswordModalVisible] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [passwordErrorMessage, setPasswordErrorMessage] = useState<string | null>(null);
+
+  const openPasswordModal = () => {
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setPasswordErrorMessage(null);
+    setIsPasswordModalVisible(true);
+  };
+
+  const handleChangePassword = async () => {
+    setPasswordErrorMessage(null);
+    if (!newPassword) {
+      setPasswordErrorMessage('Please enter your new password.');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordErrorMessage('New password must be at least 6 characters long.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordErrorMessage('New passwords do not match. Please verify.');
+      return;
+    }
+
+    try {
+      const res = await changePasswordApi({
+        userId: activeUserId,
+        userEmail: activeUserEmail,
+        currentPassword: currentPassword.trim() || undefined,
+        newPassword: newPassword.trim(),
+      }).unwrap();
+
+      setIsPasswordModalVisible(false);
+      Alert.alert('Password Changed! 🔐', res.message || 'Your login password was updated successfully.');
+    } catch (err: any) {
+      const msg =
+        err?.data?.message ||
+        err?.error ||
+        'Failed to change password. Please verify your current password.';
+      setPasswordErrorMessage(msg);
+    }
+  };
+
   const handleLogOut = () => {
     Alert.alert('Log Out', 'Are you sure you want to log out of MediRem?', [
       { text: 'Cancel', style: 'cancel' },
@@ -381,13 +553,26 @@ export default function ProfileScreen() {
         }>
         {/* User Profile Card from Neon DB */}
         <View style={styles.userCard}>
-          <View style={styles.avatarCircle}>
-            <Ionicons
-              name={isAdmin ? 'shield-checkmark' : 'person'}
-              size={28}
-              color={isAdmin ? '#D97706' : '#208AEF'}
-            />
-          </View>
+          <TouchableOpacity
+            onPress={openPhotoModal}
+            activeOpacity={0.85}
+            style={styles.avatarTouchWrapper}
+            accessibilityLabel="Change profile photo">
+            {userProfile?.avatarUrl ? (
+              <Image source={{ uri: userProfile.avatarUrl }} style={styles.avatarImg} />
+            ) : (
+              <View style={styles.avatarCircle}>
+                <Ionicons
+                  name={isAdmin ? 'shield-checkmark' : 'person'}
+                  size={28}
+                  color={isAdmin ? '#D97706' : '#208AEF'}
+                />
+              </View>
+            )}
+            <View style={styles.avatarCameraBadge}>
+              <Ionicons name="camera" size={11} color="#FFFFFF" />
+            </View>
+          </TouchableOpacity>
 
           <View style={styles.userInfoCol}>
             <View style={styles.nameRow}>
@@ -515,6 +700,40 @@ export default function ProfileScreen() {
               <View>
                 <Text style={styles.menuText}>Personal Information</Text>
                 <Text style={styles.menuSubText}>{displayName} • {displayPhone || 'Add phone'}</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={openPhotoModal}
+            activeOpacity={0.7}>
+            <View style={styles.menuItemLeft}>
+              <View style={[styles.menuIcon, { backgroundColor: '#EDE9FE' }]}>
+                <Ionicons name="camera-outline" size={18} color="#8B5CF6" />
+              </View>
+              <View>
+                <Text style={styles.menuText}>Profile Photo</Text>
+                <Text style={styles.menuSubText}>
+                  {userProfile?.avatarUrl ? 'Change or remove picture' : 'Upload photo or choose avatar'}
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={openPasswordModal}
+            activeOpacity={0.7}>
+            <View style={styles.menuItemLeft}>
+              <View style={[styles.menuIcon, { backgroundColor: '#FEF3C7' }]}>
+                <Ionicons name="lock-closed-outline" size={18} color="#D97706" />
+              </View>
+              <View>
+                <Text style={styles.menuText}>Change Password</Text>
+                <Text style={styles.menuSubText}>Update your MediRem login password</Text>
               </View>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
@@ -848,6 +1067,17 @@ export default function ProfileScreen() {
               </View>
             </View>
 
+            <TouchableOpacity
+              onPress={() => {
+                setIsEditModalVisible(false);
+                openPhotoModal();
+              }}
+              style={styles.editModalPhotoBtn}
+              activeOpacity={0.8}>
+              <Ionicons name="camera-outline" size={18} color="#208AEF" />
+              <Text style={styles.editModalPhotoBtnText}>Update Profile Photo</Text>
+            </TouchableOpacity>
+
             <View style={styles.modalActionsRow}>
               <TouchableOpacity
                 style={styles.cancelBtn}
@@ -866,6 +1096,260 @@ export default function ProfileScreen() {
                   <>
                     <Text style={styles.saveBtnText}>Save Changes</Text>
                     <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* UPDATE PROFILE PHOTO MODAL */}
+      <Modal
+        visible={isPhotoModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsPhotoModalVisible(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCardLarge}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={styles.modalPhotoIconBox}>
+                  <Ionicons name="camera" size={20} color="#208AEF" />
+                </View>
+                <Text style={styles.modalTitle}>Profile Photo 📸</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsPhotoModalVisible(false)}
+                style={styles.modalCloseBtn}>
+                <Ionicons name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 460 }}>
+              <Text style={styles.modalSub}>
+                Upload a custom picture from your device gallery, choose an avatar preset, or enter an image link.
+              </Text>
+
+              {photoErrorMessage && (
+                <View style={styles.errorBanner}>
+                  <Ionicons name="alert-circle" size={16} color="#DC2626" />
+                  <Text style={styles.errorText}>{photoErrorMessage}</Text>
+                </View>
+              )}
+
+              {/* Current Photo Preview */}
+              <View style={styles.photoPreviewSection}>
+                <View style={styles.photoPreviewWrapper}>
+                  {userProfile?.avatarUrl ? (
+                    <Image source={{ uri: userProfile.avatarUrl }} style={styles.photoPreviewImg} />
+                  ) : (
+                    <View style={styles.photoPreviewPlaceholder}>
+                      <Ionicons
+                        name={isAdmin ? 'shield-checkmark' : 'person'}
+                        size={40}
+                        color={isAdmin ? '#D97706' : '#208AEF'}
+                      />
+                    </View>
+                  )}
+                </View>
+                <Text style={styles.photoPreviewTitle}>{displayName}</Text>
+                <Text style={styles.photoPreviewSub}>{displayEmail}</Text>
+              </View>
+
+              {/* Upload Button */}
+              <TouchableOpacity
+                style={styles.galleryUploadBtn}
+                onPress={handlePickFromGallery}
+                disabled={isUpdatingProfile}
+                activeOpacity={0.8}>
+                <Ionicons name="images" size={20} color="#FFFFFF" />
+                <Text style={styles.galleryUploadBtnText}>Choose from Photo Library</Text>
+              </TouchableOpacity>
+
+              {/* Preset Avatars Header */}
+              <Text style={styles.avatarPresetsHeader}>Or Choose a Healthcare Avatar:</Text>
+              <View style={styles.presetAvatarGrid}>
+                {PRESET_AVATARS.map((item) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[
+                      styles.presetAvatarItem,
+                      userProfile?.avatarUrl === item.uri && styles.presetAvatarItemActive,
+                    ]}
+                    onPress={() => handleSelectPresetAvatar(item.uri)}
+                    activeOpacity={0.75}>
+                    <Image source={{ uri: item.uri }} style={styles.presetAvatarThumb} />
+                    <Text style={styles.presetAvatarLabel}>{item.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Custom Image URL Option */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Image URL Link</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="link-outline" size={18} color="#64748B" style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={styles.textInput}
+                    value={customAvatarInput}
+                    onChangeText={setCustomAvatarInput}
+                    placeholder="https://example.com/avatar.jpg"
+                    placeholderTextColor="#94A3B8"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  {customAvatarInput.length > 0 && (
+                    <TouchableOpacity
+                      onPress={handleApplyCustomUrl}
+                      disabled={isUpdatingProfile}
+                      style={styles.applyUrlBtn}
+                      activeOpacity={0.7}>
+                      <Text style={styles.applyUrlBtnText}>Save</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+
+              {/* Remove Photo Button */}
+              {userProfile?.avatarUrl && (
+                <TouchableOpacity
+                  style={styles.removePhotoBtn}
+                  onPress={handleRemovePhoto}
+                  disabled={isUpdatingProfile}
+                  activeOpacity={0.75}>
+                  <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                  <Text style={styles.removePhotoBtnText}>Remove Photo</Text>
+                </TouchableOpacity>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* CHANGE PASSWORD MODAL */}
+      <Modal
+        visible={isPasswordModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsPasswordModalVisible(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={styles.modalLockIconBox}>
+                  <Ionicons name="lock-closed" size={20} color="#D97706" />
+                </View>
+                <Text style={styles.modalTitle}>Change Password 🔒</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsPasswordModalVisible(false)}
+                style={styles.modalCloseBtn}>
+                <Ionicons name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalSub}>
+              Ensure your MediRem account is using a secure password with at least 6 characters.
+            </Text>
+
+            {passwordErrorMessage && (
+              <View style={styles.errorBanner}>
+                <Ionicons name="alert-circle" size={16} color="#DC2626" />
+                <Text style={styles.errorText}>{passwordErrorMessage}</Text>
+              </View>
+            )}
+
+            {/* Current Password Field */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Current Password</Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="key-outline" size={18} color="#64748B" style={{ marginRight: 8 }} />
+                <TextInput
+                  style={styles.textInput}
+                  value={currentPassword}
+                  onChangeText={setCurrentPassword}
+                  placeholder="Enter current password"
+                  placeholderTextColor="#94A3B8"
+                  secureTextEntry={!showCurrentPassword}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity onPress={() => setShowCurrentPassword(!showCurrentPassword)}>
+                  <Ionicons
+                    name={showCurrentPassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={20}
+                    color="#64748B"
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* New Password Field */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>New Password (min 6 characters)</Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="lock-closed-outline" size={18} color="#64748B" style={{ marginRight: 8 }} />
+                <TextInput
+                  style={styles.textInput}
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  placeholder="Enter new password"
+                  placeholderTextColor="#94A3B8"
+                  secureTextEntry={!showNewPassword}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity onPress={() => setShowNewPassword(!showNewPassword)}>
+                  <Ionicons
+                    name={showNewPassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={20}
+                    color="#64748B"
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Confirm New Password Field */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Confirm New Password</Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="shield-checkmark-outline" size={18} color="#64748B" style={{ marginRight: 8 }} />
+                <TextInput
+                  style={styles.textInput}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  placeholder="Re-enter new password"
+                  placeholderTextColor="#94A3B8"
+                  secureTextEntry={!showConfirmPassword}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
+                  <Ionicons
+                    name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={20}
+                    color="#64748B"
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.modalActionsRow}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setIsPasswordModalVisible(false)}
+                disabled={isChangingPassword}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.saveBtn, isChangingPassword && { opacity: 0.7 }]}
+                onPress={handleChangePassword}
+                disabled={isChangingPassword}>
+                {isChangingPassword ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Text style={styles.saveBtnText}>Update Password</Text>
+                    <Ionicons name="lock-closed" size={16} color="#FFFFFF" />
                   </>
                 )}
               </TouchableOpacity>
@@ -1231,16 +1715,44 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 2,
   },
+  avatarTouchWrapper: {
+    position: 'relative',
+    marginRight: 14,
+  },
+  avatarImg: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#E2E8F0',
+    borderWidth: 2,
+    borderColor: '#0284C7',
+  },
   avatarCircle: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: '#E0F2FE',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: '#0284C7',
-    marginRight: 14,
+  },
+  avatarCameraBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#208AEF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 3,
   },
   userInfoCol: {
     flex: 1,
@@ -1589,6 +2101,164 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  modalPhotoIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#E0F2FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalLockIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoPreviewSection: {
+    alignItems: 'center',
+    paddingVertical: 14,
+    marginBottom: 14,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  photoPreviewWrapper: {
+    marginBottom: 8,
+  },
+  photoPreviewImg: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 3,
+    borderColor: '#208AEF',
+  },
+  photoPreviewPlaceholder: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#E0F2FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#0284C7',
+  },
+  photoPreviewTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  photoPreviewSub: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  galleryUploadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#208AEF',
+    paddingVertical: 13,
+    borderRadius: 14,
+    marginBottom: 16,
+    elevation: 2,
+    shadowColor: '#208AEF',
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
+  },
+  galleryUploadBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  avatarPresetsHeader: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 10,
+  },
+  presetAvatarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 16,
+  },
+  presetAvatarItem: {
+    alignItems: 'center',
+    width: '30%',
+    padding: 8,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+  },
+  presetAvatarItemActive: {
+    borderColor: '#208AEF',
+    backgroundColor: '#EFF6FF',
+  },
+  presetAvatarThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    marginBottom: 4,
+    backgroundColor: '#E2E8F0',
+  },
+  presetAvatarLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#475569',
+    textAlign: 'center',
+  },
+  applyUrlBtn: {
+    backgroundColor: '#208AEF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginLeft: 6,
+  },
+  applyUrlBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  removePhotoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 11,
+    borderRadius: 12,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  removePhotoBtnText: {
+    color: '#EF4444',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  editModalPhotoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+    marginBottom: 14,
+  },
+  editModalPhotoBtnText: {
+    color: '#208AEF',
+    fontSize: 13,
+    fontWeight: '700',
   },
   // Admin Card & Modal Styles
   adminCard: {

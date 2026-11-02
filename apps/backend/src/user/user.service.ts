@@ -77,12 +77,21 @@ export class UserService {
       throw new NotFoundException('User profile not found.');
     }
 
+    let hashedPassword: string | undefined = undefined;
+    if (updateUserDto.password) {
+      if (updateUserDto.password.length < 6) {
+        throw new BadRequestException('Password must be at least 6 characters long.');
+      }
+      hashedPassword = await bcrypt.hash(updateUserDto.password, 10);
+    }
+
     const updated = await this.prisma.user.update({
       where: { id: user.id },
       data: {
         name: updateUserDto.name?.trim() || user.name,
         phone: updateUserDto.phone !== undefined ? updateUserDto.phone?.trim() || null : user.phone,
         avatarUrl: updateUserDto.avatarUrl !== undefined ? updateUserDto.avatarUrl?.trim() || null : user.avatarUrl,
+        ...(hashedPassword ? { password: hashedPassword } : {}),
       },
       include: {
         _count: { select: { medications: true } },
@@ -90,6 +99,55 @@ export class UserService {
     });
 
     return this.formatUser(updated);
+  }
+
+  /**
+   * Change password for the current authenticated user
+   */
+  async changePassword(
+    userId: string | undefined,
+    userEmail: string | undefined,
+    data: { currentPassword?: string; newPassword: string },
+  ) {
+    let user = null;
+    if (userId) {
+      user = await this.prisma.user.findUnique({ where: { id: userId } });
+    }
+    if (!user && userEmail) {
+      user = await this.prisma.user.findUnique({
+        where: { email: userEmail.trim().toLowerCase() },
+      });
+    }
+
+    if (!user) {
+      throw new NotFoundException('User profile not found. Please log in.');
+    }
+
+    if (!data.newPassword || data.newPassword.length < 6) {
+      throw new BadRequestException('New password must be at least 6 characters long.');
+    }
+
+    if (user.password && data.currentPassword) {
+      const isBcrypt = user.password.startsWith('$2a$') || user.password.startsWith('$2b$');
+      const matches = isBcrypt
+        ? await bcrypt.compare(data.currentPassword, user.password)
+        : user.password === data.currentPassword;
+
+      if (!matches) {
+        throw new BadRequestException('Current password does not match.');
+      }
+    }
+
+    const hashedPassword = await bcrypt.hash(data.newPassword, 10);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashedPassword },
+    });
+
+    return {
+      success: true,
+      message: 'Password changed successfully! You can now use your new password.',
+    };
   }
 
   /**
