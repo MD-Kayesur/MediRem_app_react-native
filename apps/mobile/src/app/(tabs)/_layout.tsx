@@ -213,18 +213,11 @@ export default function TabLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ color, focused }) => (
-            <View style={styles.iconWrapper}>
-              <Ionicons
-                name={focused ? 'home' : 'home-outline'}
-                size={22}
-                color={color as string}
-              />
-              {focused ? (
-                <View style={styles.activeDot} />
-              ) : (
-                <View style={styles.dotPlaceholder} />
-              )}
-            </View>
+            <Ionicons
+              name={focused ? 'home' : 'home-outline'}
+              size={23}
+              color={color as string}
+            />
           ),
         }}
       />
@@ -234,19 +227,12 @@ export default function TabLayout() {
         name="meds"
         options={{
           title: 'Meds',
-          tabBarIcon: ({ color, focused }) => (
-            <View style={styles.iconWrapper}>
-              <MaterialCommunityIcons
-                name="pill"
-                size={22}
-                color={color as string}
-              />
-              {focused ? (
-                <View style={styles.activeDot} />
-              ) : (
-                <View style={styles.dotPlaceholder} />
-              )}
-            </View>
+          tabBarIcon: ({ color }) => (
+            <MaterialCommunityIcons
+              name="pill"
+              size={23}
+              color={color as string}
+            />
           ),
         }}
       />
@@ -273,18 +259,11 @@ export default function TabLayout() {
         options={{
           title: 'History',
           tabBarIcon: ({ color, focused }) => (
-            <View style={styles.iconWrapper}>
-              <Ionicons
-                name={focused ? 'time' : 'time-outline'}
-                size={22}
-                color={color as string}
-              />
-              {focused ? (
-                <View style={styles.activeDot} />
-              ) : (
-                <View style={styles.dotPlaceholder} />
-              )}
-            </View>
+            <Ionicons
+              name={focused ? 'time' : 'time-outline'}
+              size={23}
+              color={color as string}
+            />
           ),
         }}
       />
@@ -295,18 +274,11 @@ export default function TabLayout() {
         options={{
           title: 'Profile',
           tabBarIcon: ({ color, focused }) => (
-            <View style={styles.iconWrapper}>
-              <Ionicons
-                name={focused ? 'person' : 'person-outline'}
-                size={22}
-                color={color as string}
-              />
-              {focused ? (
-                <View style={styles.activeDot} />
-              ) : (
-                <View style={styles.dotPlaceholder} />
-              )}
-            </View>
+            <Ionicons
+              name={focused ? 'person' : 'person-outline'}
+              size={23}
+              color={color as string}
+            />
           ),
         }}
       />
@@ -334,23 +306,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1,
-  },
-  iconWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 28,
-  },
-  activeDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#208AEF',
-    marginTop: 2,
-  },
-  dotPlaceholder: {
-    width: 4,
-    height: 4,
-    marginTop: 2,
   },
   // Floating AI Center Button Styles
   floatingCenterContainer: {
