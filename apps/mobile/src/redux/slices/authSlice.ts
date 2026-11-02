@@ -13,13 +13,9 @@ export interface AuthState {
 }
 
 const initialState: AuthState = {
-  user: {
-    id: '3a78c40e-9654-462b-b362-99bcc9516f5a',
-    name: 'MD Kayesur',
-    email: 'rmdkayesur@gmail.com',
-  },
+  user: null,
   token: null,
-  isAuthenticated: true,
+  isAuthenticated: false,
   isGuest: false,
   pendingEmail: null,
   status: 'idle',
@@ -49,6 +45,7 @@ export const authSlice = createSlice({
         id: `guest_${Date.now()}`,
         name: 'Guest User',
         email: 'guest@medirem.app',
+        role: 'USER',
       };
       state.token = null;
       state.isAuthenticated = true;

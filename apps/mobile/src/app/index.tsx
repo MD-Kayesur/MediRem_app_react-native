@@ -13,6 +13,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
+import { useAppDispatch } from '@/redux/hooks';
+import { setGuestUser } from '@/redux/slices/authSlice';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -55,6 +57,7 @@ const SLIDES: OnboardingSlide[] = [
 ];
 
 export default function LandingScreen() {
+  const dispatch = useAppDispatch();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showSplashPreview, setShowSplashPreview] = useState(false);
   const [isSplashActive, setIsSplashActive] = useState(true);
@@ -79,6 +82,7 @@ export default function LandingScreen() {
   };
 
   const handleSkip = () => {
+    dispatch(setGuestUser());
     router.push('/(tabs)/today');
   };
 

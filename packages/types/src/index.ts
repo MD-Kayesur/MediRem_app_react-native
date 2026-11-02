@@ -82,6 +82,7 @@ export interface AuthUser {
   email: string;
   phone?: string;
   avatarUrl?: string;
+  role?: 'USER' | 'ADMIN';
   createdAt?: string;
 }
 

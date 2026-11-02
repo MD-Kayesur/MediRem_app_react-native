@@ -24,8 +24,14 @@ export interface UsersListResponse {
   data: UserProfile[];
 }
 
+export interface UserQueryArg {
+  userId?: string;
+  userEmail?: string;
+}
+
 export interface UpdateProfileInput {
   userId?: string;
+  userEmail?: string;
   name?: string;
   phone?: string;
   avatarUrl?: string;
@@ -33,30 +39,56 @@ export interface UpdateProfileInput {
 
 export const userApi = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
-    getMe: builder.query<UserProfileResponse, string | void>({
-      query: (userId) => ({
-        url: '/user/me',
-        method: 'GET',
-        headers: userId ? { 'x-user-id': userId } : {},
-      }),
+    getMe: builder.query<UserProfileResponse, UserQueryArg | string | void>({
+      query: (arg) => {
+        const userId = typeof arg === 'string' ? arg : arg?.userId;
+        const userEmail = typeof arg === 'object' && arg !== null ? arg.userEmail : undefined;
+        const headers: Record<string, string> = {};
+        if (userId) headers['x-user-id'] = userId;
+        if (userEmail) headers['x-user-email'] = userEmail;
+        return {
+          url: '/user/me',
+          method: 'GET',
+          headers,
+          params: {
+            ...(userId ? { userId } : {}),
+            ...(userEmail ? { userEmail } : {}),
+          },
+        };
+      },
       providesTags: ['User'],
     }),
 
     updateMe: builder.mutation<UserProfileResponse, UpdateProfileInput>({
-      query: ({ userId, ...body }) => ({
-        url: '/user/me',
-        method: 'PATCH',
-        headers: userId ? { 'x-user-id': userId } : {},
-        body,
-      }),
+      query: ({ userId, userEmail, ...body }) => {
+        const headers: Record<string, string> = {};
+        if (userId) headers['x-user-id'] = userId;
+        if (userEmail) headers['x-user-email'] = userEmail;
+        return {
+          url: '/user/me',
+          method: 'PATCH',
+          headers,
+          params: {
+            ...(userId ? { userId } : {}),
+            ...(userEmail ? { userEmail } : {}),
+          },
+          body,
+        };
+      },
       invalidatesTags: ['User'],
     }),
 
-    getAllUsers: builder.query<UsersListResponse, void>({
-      query: () => ({
-        url: '/user',
-        method: 'GET',
-      }),
+    getAllUsers: builder.query<UsersListResponse, { adminId?: string; adminEmail?: string } | void>({
+      query: (arg) => {
+        const headers: Record<string, string> = {};
+        if (arg?.adminId) headers['x-user-id'] = arg.adminId;
+        if (arg?.adminEmail) headers['x-user-email'] = arg.adminEmail;
+        return {
+          url: '/user',
+          method: 'GET',
+          headers,
+        };
+      },
       providesTags: ['User'],
     }),
 

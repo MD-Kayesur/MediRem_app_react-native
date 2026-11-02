@@ -44,19 +44,32 @@ export class UserController {
     required: false,
     description: 'Current authenticated user UUID (optional if passed via query or token)',
   })
+  @ApiHeader({
+    name: 'x-user-email',
+    required: false,
+    description: 'Current authenticated user email',
+  })
   @ApiQuery({
     name: 'userId',
     required: false,
     description: 'User UUID override (for testing or dev bypass)',
   })
+  @ApiQuery({
+    name: 'userEmail',
+    required: false,
+    description: 'User email override',
+  })
   @ApiResponse({ status: 200, description: 'Profile retrieved successfully.' })
   @ApiResponse({ status: 404, description: 'User profile not found.' })
   getMe(
     @Headers('x-user-id') headerUserId?: string,
+    @Headers('x-user-email') headerUserEmail?: string,
     @Query('userId') queryUserId?: string,
+    @Query('userEmail') queryUserEmail?: string,
   ) {
     const activeUserId = headerUserId || queryUserId;
-    return this.userService.getMe(activeUserId);
+    const activeUserEmail = headerUserEmail || queryUserEmail;
+    return this.userService.getMe(activeUserId, activeUserEmail);
   }
 
   /**
@@ -73,19 +86,32 @@ export class UserController {
     required: false,
     description: 'Current user UUID',
   })
+  @ApiHeader({
+    name: 'x-user-email',
+    required: false,
+    description: 'Current user email',
+  })
   @ApiQuery({
     name: 'userId',
     required: false,
     description: 'User UUID override',
   })
+  @ApiQuery({
+    name: 'userEmail',
+    required: false,
+    description: 'User email override',
+  })
   @ApiResponse({ status: 200, description: 'Profile updated successfully.' })
   updateMe(
     @Body() updateUserDto: UpdateUserDto,
     @Headers('x-user-id') headerUserId?: string,
+    @Headers('x-user-email') headerUserEmail?: string,
     @Query('userId') queryUserId?: string,
+    @Query('userEmail') queryUserEmail?: string,
   ) {
     const activeUserId = headerUserId || queryUserId;
-    return this.userService.updateMe(activeUserId, updateUserDto);
+    const activeUserEmail = headerUserEmail || queryUserEmail;
+    return this.userService.updateMe(activeUserId, activeUserEmail, updateUserDto);
   }
 
   /**
@@ -102,19 +128,32 @@ export class UserController {
     required: false,
     description: 'Admin user UUID for authorization verification',
   })
+  @ApiHeader({
+    name: 'x-user-email',
+    required: false,
+    description: 'Admin user email for authorization verification',
+  })
   @ApiQuery({
     name: 'adminUserId',
     required: false,
     description: 'Admin user UUID fallback for admin panel testing',
   })
+  @ApiQuery({
+    name: 'adminEmail',
+    required: false,
+    description: 'Admin user email fallback',
+  })
   @ApiResponse({ status: 200, description: 'List of all registered users.' })
   @ApiResponse({ status: 403, description: 'Forbidden. Admin privileges required.' })
   findAll(
     @Headers('x-user-id') headerUserId?: string,
+    @Headers('x-user-email') headerUserEmail?: string,
     @Query('adminUserId') queryAdminUserId?: string,
+    @Query('adminEmail') queryAdminEmail?: string,
   ) {
     const adminId = headerUserId || queryAdminUserId;
-    return this.userService.findAll(adminId);
+    const adminEmail = headerUserEmail || queryAdminEmail;
+    return this.userService.findAll(adminId, adminEmail);
   }
 
   /**

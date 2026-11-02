@@ -21,6 +21,7 @@ import {
   useUpdateMeMutation,
   useGetAllUsersQuery,
   logout,
+  apiSlice,
   setActiveRingtone,
   addCustomRingtone,
   updateCustomRingtone,
@@ -103,15 +104,22 @@ export default function ProfileScreen() {
   const dispatch = useAppDispatch();
   const authStateUser = useAppSelector((state) => state.auth.user);
   const activeUserId = authStateUser?.id;
+  const activeUserEmail = authStateUser?.email;
 
   // 1. Fetch exact user profile directly from Neon Cloud PostgreSQL backend
   const {
     data: profileResponse,
     isFetching: isProfileFetching,
     refetch,
-  } = useGetMeQuery(activeUserId, {
-    refetchOnMountOrArgChange: true,
-  });
+  } = useGetMeQuery(
+    activeUserId || activeUserEmail
+      ? { userId: activeUserId, userEmail: activeUserEmail }
+      : undefined,
+    {
+      skip: !activeUserId && !activeUserEmail,
+      refetchOnMountOrArgChange: true,
+    }
+  );
 
   const [updateMe, { isLoading: isUpdatingProfile }] = useUpdateMeMutation();
 
@@ -119,21 +127,25 @@ export default function ProfileScreen() {
   const displayName = userProfile?.name || authStateUser?.name || 'MediRem User';
   const displayEmail = userProfile?.email || authStateUser?.email || 'user@medirem.app';
   const displayPhone = userProfile?.phone || authStateUser?.phone || null;
-  const role = userProfile?.role || 'USER';
+  // Strictly enforce: isAdmin is TRUE ONLY if the profile returned from Neon DB is an ADMIN
+  const role = userProfile?.role || authStateUser?.role || 'USER';
   const isAdmin = role === 'ADMIN';
   const isVerified = userProfile?.isVerified ?? true;
   const medicationsCount = userProfile?.medicationsCount ?? 0;
 
-  // Admin Panel: Get all registered users (Strictly for ADMIN role)
+  // Admin Panel: Get all registered users (Strictly for confirmed ADMIN role)
   const [isAdminModalVisible, setIsAdminModalVisible] = useState(false);
   const {
     data: allUsersResponse,
     isFetching: isFetchingAllUsers,
     refetch: refetchAllUsers,
-  } = useGetAllUsersQuery(undefined, {
-    skip: !isAdmin,
-    refetchOnMountOrArgChange: true,
-  });
+  } = useGetAllUsersQuery(
+    isAdmin ? { adminId: activeUserId, adminEmail: activeUserEmail } : undefined,
+    {
+      skip: !isAdmin,
+      refetchOnMountOrArgChange: true,
+    }
+  );
 
   // Settings State
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
@@ -293,6 +305,7 @@ export default function ProfileScreen() {
     try {
       await updateMe({
         userId: activeUserId,
+        userEmail: activeUserEmail,
         name: editName.trim(),
         phone: editPhone.trim() || undefined,
       }).unwrap();
@@ -314,6 +327,7 @@ export default function ProfileScreen() {
         style: 'destructive',
         onPress: () => {
           dispatch(logout());
+          dispatch(apiSlice.util.resetApiState());
           router.replace('/sign-in');
         },
       },

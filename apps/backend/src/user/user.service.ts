@@ -20,58 +20,36 @@ export class UserService {
   /**
    * Get current authenticated user profile
    */
-  async getMe(userId?: string) {
-    if (!userId) {
-      // Find MD Kayesur first, then any verified user, then any user in Neon DB as default
-      let defaultUser = await this.prisma.user.findFirst({
-        where: { email: 'rmdkayesur@gmail.com' },
+  async getMe(userId?: string, userEmail?: string) {
+    let user = null;
+
+    // 1. Try finding by UUID if provided
+    if (userId) {
+      user = await this.prisma.user.findUnique({
+        where: { id: userId },
         include: {
           _count: {
             select: { medications: true },
           },
         },
       });
-
-      if (!defaultUser) {
-        defaultUser = await this.prisma.user.findFirst({
-          where: { isVerified: true },
-          orderBy: { createdAt: 'desc' },
-          include: {
-            _count: {
-              select: { medications: true },
-            },
-          },
-        });
-      }
-
-      if (!defaultUser) {
-        defaultUser = await this.prisma.user.findFirst({
-          orderBy: { createdAt: 'desc' },
-          include: {
-            _count: {
-              select: { medications: true },
-            },
-          },
-        });
-      }
-
-      if (!defaultUser) {
-        throw new NotFoundException('No active user profile found.');
-      }
-      return this.formatUser(defaultUser);
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      include: {
-        _count: {
-          select: { medications: true },
+    // 2. If not found by ID or if ID wasn't provided, try by email
+    if (!user && userEmail) {
+      const cleanEmail = userEmail.trim().toLowerCase();
+      user = await this.prisma.user.findUnique({
+        where: { email: cleanEmail },
+        include: {
+          _count: {
+            select: { medications: true },
+          },
         },
-      },
-    });
+      });
+    }
 
     if (!user) {
-      throw new NotFoundException(`User with ID "${userId}" not found.`);
+      throw new NotFoundException('No active user profile found. Please sign in to view your profile.');
     }
 
     return this.formatUser(user);
@@ -80,26 +58,27 @@ export class UserService {
   /**
    * Update current authenticated user profile
    */
-  async updateMe(userId: string | undefined, updateUserDto: UpdateUserDto) {
-    let targetId = userId;
-    if (!targetId) {
-      const defaultUser = await this.prisma.user.findFirst({
-        where: { isVerified: true },
-        orderBy: { createdAt: 'desc' },
+  async updateMe(
+    userId: string | undefined,
+    userEmail: string | undefined,
+    updateUserDto: UpdateUserDto,
+  ) {
+    let user = null;
+    if (userId) {
+      user = await this.prisma.user.findUnique({ where: { id: userId } });
+    }
+    if (!user && userEmail) {
+      user = await this.prisma.user.findUnique({
+        where: { email: userEmail.trim().toLowerCase() },
       });
-      if (!defaultUser) {
-        throw new NotFoundException('No active user profile found.');
-      }
-      targetId = defaultUser.id;
     }
 
-    const user = await this.prisma.user.findUnique({ where: { id: targetId } });
     if (!user) {
-      throw new NotFoundException(`User with ID "${targetId}" not found.`);
+      throw new NotFoundException('User profile not found.');
     }
 
     const updated = await this.prisma.user.update({
-      where: { id: targetId },
+      where: { id: user.id },
       data: {
         name: updateUserDto.name?.trim() || user.name,
         phone: updateUserDto.phone !== undefined ? updateUserDto.phone?.trim() || null : user.phone,
@@ -117,16 +96,18 @@ export class UserService {
    * [Admin Only] Retrieve all registered users
    * Requires verified ADMIN privileges
    */
-  async findAll(adminId?: string) {
-    if (!adminId) {
-      throw new ForbiddenException(
-        'Access Denied: Admin authorization required. Only administrators can access the all users directory.',
-      );
+  async findAll(adminId?: string, adminEmail?: string) {
+    let requester = null;
+    if (adminId) {
+      requester = await this.prisma.user.findUnique({
+        where: { id: adminId },
+      });
     }
-
-    const requester = await this.prisma.user.findUnique({
-      where: { id: adminId },
-    });
+    if (!requester && adminEmail) {
+      requester = await this.prisma.user.findUnique({
+        where: { email: adminEmail.trim().toLowerCase() },
+      });
+    }
 
     if (!requester || requester.role !== 'ADMIN') {
       throw new ForbiddenException(

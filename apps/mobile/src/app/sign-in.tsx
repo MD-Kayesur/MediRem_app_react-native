@@ -16,7 +16,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSignInMutation } from '@/redux/api/authApi';
 import { useAppDispatch } from '@/redux/hooks';
-import { setCredentials, setGuestUser } from '@/redux/slices/authSlice';
+import { setCredentials, setGuestUser, apiSlice } from '@/redux';
 
 export default function SignInScreen() {
   const dispatch = useAppDispatch();
@@ -31,21 +31,23 @@ export default function SignInScreen() {
 
   const loading = isSigningIn;
 
-  const handleSignIn = async () => {
+  const handleSignIn = async (overrideEmail?: string) => {
     setErrorMessage(null);
-    if (!email.trim()) {
+    const targetEmail = (overrideEmail || email).trim().toLowerCase();
+    if (!targetEmail) {
       setErrorMessage('Please enter your email address.');
       return;
     }
 
     try {
-      const cleanEmail = email.trim().toLowerCase();
       const result = await signInApi({
-        email: cleanEmail,
+        email: targetEmail,
         password: password || undefined,
       }).unwrap();
 
       if (result.success && result.user) {
+        // Reset any stale RTK Query cache to guarantee strict account isolation
+        dispatch(apiSlice.util.resetApiState());
         dispatch(setCredentials({ user: result.user, token: result.token }));
         router.replace('/(tabs)/today');
       } else {
@@ -210,7 +212,7 @@ export default function SignInScreen() {
 
             {/* Sign In Primary Button */}
             <TouchableOpacity
-              onPress={handleSignIn}
+              onPress={() => handleSignIn()}
               disabled={loading}
               style={[styles.primaryButton, loading && styles.buttonDisabled]}
               activeOpacity={0.85}>
@@ -236,8 +238,9 @@ export default function SignInScreen() {
           <View style={styles.socialRow}>
             <TouchableOpacity
               onPress={() => {
-                setEmail('google.user@medirem.app');
-                handleSignIn();
+                const googleEmail = 'google.user@medirem.app';
+                setEmail(googleEmail);
+                handleSignIn(googleEmail);
               }}
               style={styles.socialButton}
               activeOpacity={0.8}>
@@ -247,8 +250,9 @@ export default function SignInScreen() {
 
             <TouchableOpacity
               onPress={() => {
-                setEmail('apple.user@medirem.app');
-                handleSignIn();
+                const appleEmail = 'apple.user@medirem.app';
+                setEmail(appleEmail);
+                handleSignIn(appleEmail);
               }}
               style={styles.socialButton}
               activeOpacity={0.8}>
