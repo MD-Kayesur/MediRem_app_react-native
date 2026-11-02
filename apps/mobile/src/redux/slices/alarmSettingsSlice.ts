@@ -134,3 +134,4 @@ export const {
 } = alarmSettingsSlice.actions;
 
 export default alarmSettingsSlice.reducer;
+

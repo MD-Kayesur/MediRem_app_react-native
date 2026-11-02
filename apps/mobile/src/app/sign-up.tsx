@@ -43,7 +43,6 @@ export default function SignUpScreen() {
 
   // Verification Code State
   const [verifyCode, setVerifyCode] = useState('');
-  const [receivedCode, setReceivedCode] = useState<string | null>(null);
   const [resendCountdown, setResendCountdown] = useState(0);
 
   // Success Modal State (shown after email code verification)
@@ -122,7 +121,7 @@ export default function SignUpScreen() {
 
     try {
       const cleanEmail = email.trim().toLowerCase();
-      const result = await signUpApi({
+      await signUpApi({
         name: name.trim(),
         email: cleanEmail,
         password,
@@ -131,7 +130,6 @@ export default function SignUpScreen() {
 
       // ALWAYS transition to 6-digit code verification step!
       dispatch(setPendingEmail(cleanEmail));
-      setReceivedCode(result?.code || null);
       setVerifyCode(''); // Clean field ready for user entry
       setResendCountdown(60); // 60s cooldown
       setStep('verify');
@@ -443,7 +441,7 @@ export default function SignUpScreen() {
                 </TouchableOpacity>
 
                 {/* Direct shortcut to verification screen if user already received code */}
-                <TouchableOpacity
+                {/* <TouchableOpacity
                   onPress={() => {
                     if (!email.trim() || !email.includes('@')) {
                       setErrorMessage('Please enter your email above first, then click here to enter your code.');
@@ -458,7 +456,7 @@ export default function SignUpScreen() {
                   <Text style={styles.alreadyHaveCodeText}>
                     Already have a verification code? <Text style={styles.alreadyHaveCodeLink}>Enter Code</Text>
                   </Text>
-                </TouchableOpacity>
+                </TouchableOpacity> */}
               </View>
 
               {/* Footer: Sign In Link */}
@@ -489,14 +487,14 @@ export default function SignUpScreen() {
               </View>
 
               {/* Developer / Live Help Chip */}
-              {receivedCode && (
+              {/* {receivedCode && (
                 <View style={styles.infoBanner}>
                   <Ionicons name="key-outline" size={16} color="#0284C7" />
                   <Text style={styles.infoBannerText}>
                     Code sent to your Gmail: <Text style={{ fontWeight: '800' }}>{receivedCode}</Text>
                   </Text>
                 </View>
-              )}
+              )} */}
 
               {errorMessage && (
                 <View style={styles.errorBanner}>
