@@ -15,7 +15,7 @@ import { router } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import { setCredentials } from '@/redux/slices/authSlice';
-import { saveUserSession } from '@/utils/authStorage';
+import { saveUserSession, getUserSession } from '@/utils/authStorage';
 import { AuthUser } from '@medirem/types';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -68,20 +68,40 @@ export default function LandingScreen() {
   const [isSplashActive, setIsSplashActive] = useState(true);
   const flatListRef = useRef<FlatList<OnboardingSlide>>(null);
 
-  // If already logged in, immediately redirect to Home screen!
+  // Immediate Session Check & Auto-Redirect to Home if already logged in
   useEffect(() => {
-    if (isAuthenticated && authStateUser?.id) {
-      router.replace('/(tabs)/today');
-    }
-  }, [isAuthenticated, authStateUser]);
+    let isMounted = true;
 
-  useEffect(() => {
-    // Show splash screen for 1.8 seconds on initial launch then reveal onboarding
-    const timer = setTimeout(() => {
-      setIsSplashActive(false);
-    }, 1800);
-    return () => clearTimeout(timer);
-  }, []);
+    (async () => {
+      // 1. If Redux state is already authenticated, redirect straight to Home
+      if (isAuthenticated && authStateUser?.id) {
+        router.replace('/(tabs)/today');
+        return;
+      }
+
+      // 2. Direct storage check for immediate persistent session restore
+      const session = await getUserSession();
+      if (isMounted && session?.user?.id) {
+        dispatch(
+          setCredentials({
+            user: session.user,
+            token: session.token || undefined,
+          })
+        );
+        router.replace('/(tabs)/today');
+        return;
+      }
+
+      // 3. Only if no saved session exists, reveal onboarding
+      if (isMounted) {
+        setIsSplashActive(false);
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthenticated, authStateUser, dispatch]);
 
   const handleNext = () => {
     if (currentIndex < SLIDES.length - 1) {

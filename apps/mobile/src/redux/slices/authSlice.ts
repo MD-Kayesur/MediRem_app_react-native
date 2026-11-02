@@ -7,6 +7,7 @@ export interface AuthState {
   token: string | null;
   isAuthenticated: boolean;
   isGuest: boolean;
+  isSessionRestored: boolean;
   pendingEmail: string | null;
   status: 'idle' | 'loading' | 'succeeded' | 'failed';
   error: string | null;
@@ -17,6 +18,7 @@ const initialState: AuthState = {
   token: null,
   isAuthenticated: false,
   isGuest: false,
+  isSessionRestored: false,
   pendingEmail: null,
   status: 'idle',
   error: null,
@@ -34,8 +36,12 @@ export const authSlice = createSlice({
       state.token = action.payload.token || null;
       state.isAuthenticated = true;
       state.isGuest = false;
+      state.isSessionRestored = true;
       state.pendingEmail = null;
       state.error = null;
+    },
+    setSessionChecked: (state) => {
+      state.isSessionRestored = true;
     },
     setPendingEmail: (state, action: PayloadAction<string>) => {
       state.pendingEmail = action.payload;
@@ -50,6 +56,7 @@ export const authSlice = createSlice({
       state.token = null;
       state.isAuthenticated = true;
       state.isGuest = true;
+      state.isSessionRestored = true;
       state.pendingEmail = null;
       state.error = null;
     },
@@ -58,6 +65,7 @@ export const authSlice = createSlice({
       state.token = null;
       state.isAuthenticated = false;
       state.isGuest = false;
+      state.isSessionRestored = true;
       state.pendingEmail = null;
       state.error = null;
       state.status = 'idle';
@@ -94,8 +102,14 @@ export const authSlice = createSlice({
   },
 });
 
-export const { setCredentials, setPendingEmail, setGuestUser, logout, setError } =
-  authSlice.actions;
+export const {
+  setCredentials,
+  setSessionChecked,
+  setPendingEmail,
+  setGuestUser,
+  logout,
+  setError,
+} = authSlice.actions;
 
 export const selectCurrentUser = (state: { auth: AuthState }) => state.auth.user;
 export const selectIsAuthenticated = (state: { auth: AuthState }) =>

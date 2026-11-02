@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSignInMutation } from '@/redux/api/authApi';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import { setCredentials, apiSlice } from '@/redux';
-import { saveUserSession } from '@/utils/authStorage';
+import { saveUserSession, getUserSession } from '@/utils/authStorage';
 import { AuthUser } from '@medirem/types';
 
 export default function SignInScreen() {
@@ -36,12 +36,29 @@ export default function SignInScreen() {
 
   const loading = isSigningIn;
 
-  // Auto-redirect if already authenticated
+  // Auto-redirect if already authenticated or session exists in local storage
   useEffect(() => {
-    if (isAuthenticated && authStateUser?.id) {
-      router.replace('/(tabs)/today');
-    }
-  }, [isAuthenticated, authStateUser]);
+    let isMounted = true;
+    (async () => {
+      if (isAuthenticated && authStateUser?.id) {
+        router.replace('/(tabs)/today');
+        return;
+      }
+      const session = await getUserSession();
+      if (isMounted && session?.user?.id) {
+        dispatch(
+          setCredentials({
+            user: session.user,
+            token: session.token || undefined,
+          })
+        );
+        router.replace('/(tabs)/today');
+      }
+    })();
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthenticated, authStateUser, dispatch]);
 
   const handleSignIn = async (overrideEmail?: string) => {
     setErrorMessage(null);
@@ -94,6 +111,12 @@ export default function SignInScreen() {
     setErrorMessage(null);
   };
 
+  const handleAdminFill = (adminEmail: string) => {
+    setEmail(adminEmail);
+    setPassword('kayes1122');
+    setErrorMessage(null);
+  };
+
   const handleForgotPassword = () => {
     router.push('/forgot-password');
   };
@@ -139,16 +162,38 @@ export default function SignInScreen() {
             </Text>
           </View>
 
-          {/* Demo Autofill Chip */}
-          <TouchableOpacity
-            onPress={handleDemoFill}
-            style={styles.demoChip}
-            activeOpacity={0.8}>
-            <Ionicons name="flash-outline" size={14} color="#208AEF" />
-            <Text style={styles.demoChipText}>
-              1-Tap Demo: <Text style={{ fontWeight: '700' }}>rahman@medirem.app</Text>
-            </Text>
-          </TouchableOpacity>
+          {/* Autofill Quick Chips */}
+          <View style={{ gap: 8, marginBottom: 12 }}>
+            <TouchableOpacity
+              onPress={() => handleAdminFill('rmdkaeysur@gmail.com')}
+              style={[styles.demoChip, { backgroundColor: '#FEF3C7', borderColor: '#FCD34D' }]}
+              activeOpacity={0.8}>
+              <Ionicons name="shield-checkmark" size={14} color="#D97706" />
+              <Text style={[styles.demoChipText, { color: '#92400E' }]}>
+                👑 1-Tap Admin: <Text style={{ fontWeight: '700' }}>rmdkaeysur@gmail.com</Text>
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => handleAdminFill('mdkayesurrahman67@gmail.com')}
+              style={[styles.demoChip, { backgroundColor: '#FEF3C7', borderColor: '#FCD34D' }]}
+              activeOpacity={0.8}>
+              <Ionicons name="shield-checkmark" size={14} color="#D97706" />
+              <Text style={[styles.demoChipText, { color: '#92400E' }]}>
+                👑 1-Tap Admin: <Text style={{ fontWeight: '700' }}>mdkayesurrahman67@gmail.com</Text>
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={handleDemoFill}
+              style={styles.demoChip}
+              activeOpacity={0.8}>
+              <Ionicons name="flash-outline" size={14} color="#208AEF" />
+              <Text style={styles.demoChipText}>
+                1-Tap Demo: <Text style={{ fontWeight: '700' }}>rahman@medirem.app</Text>
+              </Text>
+            </TouchableOpacity>
+          </View>
 
           {/* Error Banner if any */}
           {errorMessage ? (
