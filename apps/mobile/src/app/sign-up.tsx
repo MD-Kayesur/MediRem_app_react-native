@@ -21,16 +21,28 @@ import {
   useVerifySignupMutation,
   useResendSignupCodeMutation,
 } from '@/redux/api/authApi';
-import { useAppDispatch } from '@/redux/hooks';
-import { setGuestUser, setPendingEmail } from '@/redux/slices/authSlice';
+import { useAppDispatch, useAppSelector } from '@/redux/hooks';
+import { setPendingEmail, setCredentials } from '@/redux/slices/authSlice';
+import { saveUserSession } from '@/utils/authStorage';
+import { AuthUser } from '@medirem/types';
 
 export default function SignUpScreen() {
   const dispatch = useAppDispatch();
+  const authStateUser = useAppSelector((state) => state.auth.user);
+  const isAuthenticated = useAppSelector((state) => state.auth.isAuthenticated);
+
   const [signUpApi, { isLoading: isSigningUp }] = useSignUpMutation();
   const [verifySignupApi, { isLoading: isVerifying }] = useVerifySignupMutation();
   const [resendCodeApi, { isLoading: isResending }] = useResendSignupCodeMutation();
 
   const [step, setStep] = useState<'form' | 'verify'>('form');
+
+  // If already authenticated, redirect to Home
+  useEffect(() => {
+    if (isAuthenticated && authStateUser?.id) {
+      router.replace('/(tabs)/today');
+    }
+  }, [isAuthenticated, authStateUser]);
 
   // Form Fields
   const [name, setName] = useState('');
@@ -188,8 +200,15 @@ export default function SignUpScreen() {
     }
   };
 
-  const handleGuestLogin = () => {
-    dispatch(setGuestUser());
+  const handleGuestLogin = async () => {
+    const guestUser: AuthUser = {
+      id: `guest_${Date.now()}`,
+      name: 'Guest User',
+      email: 'guest@medirem.app',
+      role: 'USER',
+    };
+    await saveUserSession(guestUser);
+    dispatch(setCredentials({ user: guestUser }));
     router.replace('/(tabs)/today');
   };
 

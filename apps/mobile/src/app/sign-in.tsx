@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,11 +15,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSignInMutation } from '@/redux/api/authApi';
-import { useAppDispatch } from '@/redux/hooks';
-import { setCredentials, setGuestUser, apiSlice } from '@/redux';
+import { useAppDispatch, useAppSelector } from '@/redux/hooks';
+import { setCredentials, apiSlice } from '@/redux';
+import { saveUserSession } from '@/utils/authStorage';
+import { AuthUser } from '@medirem/types';
 
 export default function SignInScreen() {
   const dispatch = useAppDispatch();
+  const authStateUser = useAppSelector((state) => state.auth.user);
+  const isAuthenticated = useAppSelector((state) => state.auth.isAuthenticated);
+
   const [signInApi, { isLoading: isSigningIn }] = useSignInMutation();
 
   const params = useLocalSearchParams<{ email?: string }>();
@@ -30,6 +35,13 @@ export default function SignInScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const loading = isSigningIn;
+
+  // Auto-redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated && authStateUser?.id) {
+      router.replace('/(tabs)/today');
+    }
+  }, [isAuthenticated, authStateUser]);
 
   const handleSignIn = async (overrideEmail?: string) => {
     setErrorMessage(null);
@@ -46,6 +58,8 @@ export default function SignInScreen() {
       }).unwrap();
 
       if (result.success && result.user) {
+        // Persist session locally so user stays signed in even after closing app
+        await saveUserSession(result.user, result.token);
         // Reset any stale RTK Query cache to guarantee strict account isolation
         dispatch(apiSlice.util.resetApiState());
         dispatch(setCredentials({ user: result.user, token: result.token }));
@@ -62,8 +76,15 @@ export default function SignInScreen() {
     }
   };
 
-  const handleGuestLogin = () => {
-    dispatch(setGuestUser());
+  const handleGuestLogin = async () => {
+    const guestUser: AuthUser = {
+      id: `guest_${Date.now()}`,
+      name: 'Guest User',
+      email: 'guest@medirem.app',
+      role: 'USER',
+    };
+    await saveUserSession(guestUser);
+    dispatch(setCredentials({ user: guestUser }));
     router.replace('/(tabs)/today');
   };
 

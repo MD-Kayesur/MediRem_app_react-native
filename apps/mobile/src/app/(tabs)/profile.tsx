@@ -35,6 +35,7 @@ import {
   stopRingtonePreview,
   setActiveSoundUrl,
 } from '@/utils/alarm';
+import { clearUserSession } from '@/utils/authStorage';
 
 const TONE_PRESETS = [
   {
@@ -325,7 +326,8 @@ export default function ProfileScreen() {
       {
         text: 'Log Out',
         style: 'destructive',
-        onPress: () => {
+        onPress: async () => {
+          await clearUserSession();
           dispatch(logout());
           dispatch(apiSlice.util.resetApiState());
           router.replace('/sign-in');

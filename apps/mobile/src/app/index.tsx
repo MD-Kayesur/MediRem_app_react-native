@@ -13,8 +13,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
-import { useAppDispatch } from '@/redux/hooks';
-import { setGuestUser } from '@/redux/slices/authSlice';
+import { useAppDispatch, useAppSelector } from '@/redux/hooks';
+import { setCredentials } from '@/redux/slices/authSlice';
+import { saveUserSession } from '@/utils/authStorage';
+import { AuthUser } from '@medirem/types';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -58,10 +60,20 @@ const SLIDES: OnboardingSlide[] = [
 
 export default function LandingScreen() {
   const dispatch = useAppDispatch();
+  const authStateUser = useAppSelector((state) => state.auth.user);
+  const isAuthenticated = useAppSelector((state) => state.auth.isAuthenticated);
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showSplashPreview, setShowSplashPreview] = useState(false);
   const [isSplashActive, setIsSplashActive] = useState(true);
   const flatListRef = useRef<FlatList<OnboardingSlide>>(null);
+
+  // If already logged in, immediately redirect to Home screen!
+  useEffect(() => {
+    if (isAuthenticated && authStateUser?.id) {
+      router.replace('/(tabs)/today');
+    }
+  }, [isAuthenticated, authStateUser]);
 
   useEffect(() => {
     // Show splash screen for 1.8 seconds on initial launch then reveal onboarding
@@ -81,9 +93,16 @@ export default function LandingScreen() {
     }
   };
 
-  const handleSkip = () => {
-    dispatch(setGuestUser());
-    router.push('/(tabs)/today');
+  const handleSkip = async () => {
+    const guestUser: AuthUser = {
+      id: `guest_${Date.now()}`,
+      name: 'Guest User',
+      email: 'guest@medirem.app',
+      role: 'USER',
+    };
+    await saveUserSession(guestUser);
+    dispatch(setCredentials({ user: guestUser }));
+    router.replace('/(tabs)/today');
   };
 
   const onMomentumScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
