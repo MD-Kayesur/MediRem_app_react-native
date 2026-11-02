@@ -1,4 +1,5 @@
 import { Platform, Vibration } from 'react-native';
+import * as Speech from 'expo-speech';
 
 export const ALARM_RING_DURATION_SEC = 60; // 1 full minute of continuous ringing
 export const ALARM_RING_DURATION_MS = 60 * 1000;
@@ -12,6 +13,20 @@ let isRinging = false;
 let autoStopTimer: any = null;
 let webAudioCtx: any = null;
 let webAudioInterval: any = null;
+
+let isVoiceAlertGloballyEnabled = true;
+let voiceLoopTimeout: any = null;
+
+export function setVoiceAlertGlobalEnabled(enabled: boolean): void {
+  isVoiceAlertGloballyEnabled = enabled;
+  if (!enabled && isRinging) {
+    stopVoiceAlert();
+  }
+}
+
+export function getVoiceAlertGlobalEnabled(): boolean {
+  return isVoiceAlertGloballyEnabled;
+}
 
 export function setActiveSoundUrl(url: string) {
   if (url && url !== activeSoundUrl) {
@@ -184,6 +199,113 @@ function stopWebTone() {
 }
 
 /**
+ * Voice Alert: loudly and repeatedly speaks medicine reminder
+ */
+export function startVoiceAlert(medicationName: string) {
+  if (!isVoiceAlertGloballyEnabled) return;
+
+  const cleanName = medicationName || 'Medication';
+  const phrase = `Attention! Take your medicine, ${cleanName}. It is time to take ${cleanName}!`;
+
+  const speakIteration = () => {
+    if (!isRinging || !isVoiceAlertGloballyEnabled) return;
+
+    if (Platform.OS === 'web') {
+      try {
+        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance(phrase);
+          utterance.rate = 1.0;
+          utterance.pitch = 1.0;
+          utterance.volume = 1.0;
+          utterance.onend = () => {
+            if (isRinging && isVoiceAlertGloballyEnabled) {
+              voiceLoopTimeout = setTimeout(speakIteration, 1200);
+            }
+          };
+          utterance.onerror = () => {
+            if (isRinging && isVoiceAlertGloballyEnabled) {
+              voiceLoopTimeout = setTimeout(speakIteration, 2500);
+            }
+          };
+          window.speechSynthesis.speak(utterance);
+        }
+      } catch {
+        // safe fallback
+      }
+    } else {
+      try {
+        Speech.stop();
+        Speech.speak(phrase, {
+          language: 'en',
+          pitch: 1.0,
+          rate: 0.95,
+          onDone: () => {
+            if (isRinging && isVoiceAlertGloballyEnabled) {
+              voiceLoopTimeout = setTimeout(speakIteration, 1200);
+            }
+          },
+          onError: () => {
+            if (isRinging && isVoiceAlertGloballyEnabled) {
+              voiceLoopTimeout = setTimeout(speakIteration, 2500);
+            }
+          },
+        });
+      } catch (err) {
+        console.warn('[AlarmUtil] Speech error:', err);
+      }
+    }
+  };
+
+  speakIteration();
+}
+
+export function stopVoiceAlert(): void {
+  if (voiceLoopTimeout) {
+    clearTimeout(voiceLoopTimeout);
+    voiceLoopTimeout = null;
+  }
+  if (Platform.OS === 'web') {
+    try {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    } catch {
+      // safe fallback
+    }
+  } else {
+    try {
+      Speech.stop();
+    } catch {
+      // safe fallback
+    }
+  }
+}
+
+export function previewVoiceAlert(medicationName = 'Aspirin'): void {
+  stopAudibleAlarm();
+  stopVoiceAlert();
+  const phrase = `Attention! Take your medicine, ${medicationName}. It is time to take ${medicationName}!`;
+  if (Platform.OS === 'web') {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(phrase);
+      window.speechSynthesis.speak(utterance);
+    }
+  } else {
+    try {
+      Speech.speak(phrase, {
+        language: 'en',
+        pitch: 1.0,
+        rate: 0.95,
+      });
+    } catch (e) {
+      console.warn('[AlarmUtil] previewVoiceAlert error:', e);
+    }
+  }
+}
+
+/**
  * Start loud 1-minute alarm sound and continuous urgent vibration pattern
  */
 export async function triggerAudibleAlarm(medicationName = 'Medication'): Promise<void> {
@@ -216,12 +338,15 @@ export async function triggerAudibleAlarm(medicationName = 'Medication'): Promis
     }
   }
 
-  // 3. Clear any existing auto-stop timer
+  // 3. Start spoken voice alert in continuous loop if enabled
+  startVoiceAlert(medicationName);
+
+  // 4. Clear any existing auto-stop timer
   if (autoStopTimer) {
     clearTimeout(autoStopTimer);
   }
 
-  // 4. Automatically stop after 1 minute (60 seconds)
+  // 5. Automatically stop after 1 minute (60 seconds)
   autoStopTimer = setTimeout(() => {
     console.log('[AlarmUtil] 60s Ring Duration Reached -> Auto-stopping alarm until 3min repeat');
     stopAudibleAlarm();
@@ -235,13 +360,16 @@ export function stopAudibleAlarm(): void {
   if (!isRinging) return;
   notifyListeners(false);
 
-  console.log('[AlarmUtil] 🔕 Silencing alarm sound and vibration');
+  console.log('[AlarmUtil] 🔕 Silencing alarm sound, vibration, and voice');
 
   // Cancel auto-stop timer
   if (autoStopTimer) {
     clearTimeout(autoStopTimer);
     autoStopTimer = null;
   }
+
+  // Stop voice alert loop
+  stopVoiceAlert();
 
   // Stop vibration
   try {

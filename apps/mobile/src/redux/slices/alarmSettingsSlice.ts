@@ -17,6 +17,7 @@ export interface AlarmSettingsState {
   ringtones: RingtoneItem[];
   volume: number;
   vibrationEnabled: boolean;
+  voiceAlertEnabled: boolean;
 }
 
 export const DEFAULT_RINGTONES: RingtoneItem[] = [
@@ -82,6 +83,7 @@ const initialState: AlarmSettingsState = {
   ringtones: DEFAULT_RINGTONES,
   volume: 1.0,
   vibrationEnabled: true,
+  voiceAlertEnabled: true,
 };
 
 export const alarmSettingsSlice = createSlice({
@@ -114,12 +116,15 @@ export const alarmSettingsSlice = createSlice({
         state.activeRingtoneId = 'digital-pager';
       }
     },
-    // Volume & Vibration
+    // Volume & Vibration & Voice Alert
     setAlarmVolume: (state, action: PayloadAction<number>) => {
       state.volume = action.payload;
     },
     setVibrationEnabled: (state, action: PayloadAction<boolean>) => {
       state.vibrationEnabled = action.payload;
+    },
+    setVoiceAlertEnabled: (state, action: PayloadAction<boolean>) => {
+      state.voiceAlertEnabled = action.payload;
     },
   },
 });
@@ -131,6 +136,7 @@ export const {
   deleteCustomRingtone,
   setAlarmVolume,
   setVibrationEnabled,
+  setVoiceAlertEnabled,
 } = alarmSettingsSlice.actions;
 
 export default alarmSettingsSlice.reducer;

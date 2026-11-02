@@ -414,7 +414,7 @@ export default function MedsScreen() {
             setIsSnoozed3m(false);
             setRingSecondsLeft(60);
             setIsAlarmModalVisible(true);
-            triggerAudibleAlarm();
+            triggerAudibleAlarm(activeAlarmMed?.name || 'Medication');
             return 0;
           }
           return prev - 1;
@@ -478,7 +478,7 @@ export default function MedsScreen() {
           setRingSecondsLeft(60);
           setIsSnoozed3m(false);
           setIsAlarmModalVisible(true);
-          triggerAudibleAlarm();
+          triggerAudibleAlarm(med.name);
         }, 0);
         break; // Strictly break so only one medication alarms and stays fixed!
       }
@@ -575,7 +575,7 @@ export default function MedsScreen() {
     setRingSecondsLeft(60);
     setIsSnoozed3m(false);
     setIsAlarmModalVisible(true);
-    triggerAudibleAlarm();
+    triggerAudibleAlarm(med.name);
   };
 
   // Permanently stop when taking the dose: will NEVER repeat after 3 minutes & removes red due alert

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import {
   useGetMeQuery,
   useUpdateMeMutation,
@@ -29,6 +30,7 @@ import {
   updateCustomRingtone,
   deleteCustomRingtone,
   setVibrationEnabled,
+  setVoiceAlertEnabled,
   RingtoneItem,
 } from '@/redux';
 import { useAppSelector, useAppDispatch } from '@/redux/hooks';
@@ -36,6 +38,9 @@ import {
   previewRingtoneSound,
   stopRingtonePreview,
   setActiveSoundUrl,
+  previewVoiceAlert,
+  stopVoiceAlert,
+  setVoiceAlertGlobalEnabled,
 } from '@/utils/alarm';
 import { clearUserSession } from '@/utils/authStorage';
 
@@ -168,12 +173,19 @@ export default function ProfileScreen() {
   const activeRingtoneId = alarmSettings?.activeRingtoneId || 'digital-pager';
   const ringtonesList = alarmSettings?.ringtones || [];
   const isVibrationActive = alarmSettings?.vibrationEnabled ?? true;
+  const isVoiceAlertActive = alarmSettings?.voiceAlertEnabled ?? true;
 
   const currentRingtone =
     ringtonesList.find((r) => r.id === activeRingtoneId) || ringtonesList[0];
 
   // Sound Preview State
   const [playingRingtoneId, setPlayingRingtoneId] = useState<string | null>(null);
+  const [isPlayingVoicePreview, setIsPlayingVoicePreview] = useState(false);
+  const [selectedDeviceAudioFileName, setSelectedDeviceAudioFileName] = useState<string | null>(null);
+
+  useEffect(() => {
+    setVoiceAlertGlobalEnabled(isVoiceAlertActive);
+  }, [isVoiceAlertActive]);
 
   const handleTogglePreview = async (soundUrl: string, ringtoneId: string) => {
     if (playingRingtoneId === ringtoneId) {
@@ -200,10 +212,38 @@ export default function ProfileScreen() {
   const [ringtoneFormCategory, setRingtoneFormCategory] = useState<'beeper' | 'chime' | 'bell' | 'radar' | 'zen'>('chime');
   const [ringtoneFormVibration, setRingtoneFormVibration] = useState<'urgent' | 'standard' | 'gentle' | 'heartbeat'>('standard');
 
+  const handlePickDeviceAudio = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['audio/*'],
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const file = result.assets[0];
+        const fileName = file.name || 'Device Audio';
+        setSelectedDeviceAudioFileName(fileName);
+        setRingtoneFormToneUrl(file.uri);
+        if (!ringtoneFormName.trim()) {
+          const cleanName = fileName.replace(/\.[^/.]+$/, '');
+          setRingtoneFormName(cleanName);
+        }
+        Alert.alert(
+          'Audio Selected! 🎵',
+          `"${fileName}" was selected from your device. You can test it now using the Test button.`
+        );
+      }
+    } catch (err) {
+      console.warn('Document picker error:', err);
+      Alert.alert('File Picker Error', 'Could not open device files. Please try again.');
+    }
+  };
+
   const openAddRingtoneModal = () => {
     stopRingtonePreview();
     setPlayingRingtoneId(null);
     setEditingRingtoneId(null);
+    setSelectedDeviceAudioFileName(null);
     setRingtoneFormName('');
     setRingtoneFormDesc('Personal medication alert tone');
     setRingtoneFormToneUrl(TONE_PRESETS[1].url);
@@ -216,6 +256,9 @@ export default function ProfileScreen() {
     stopRingtonePreview();
     setPlayingRingtoneId(null);
     setEditingRingtoneId(item.id);
+    setSelectedDeviceAudioFileName(
+      item.soundUrl.startsWith('file:') || item.soundUrl.startsWith('content:') ? item.name : null
+    );
     setRingtoneFormName(item.name);
     setRingtoneFormDesc(item.description);
     setRingtoneFormToneUrl(item.soundUrl);
@@ -230,7 +273,15 @@ export default function ProfileScreen() {
       return;
     }
 
-    const matchedPreset = TONE_PRESETS.find((p) => p.url === ringtoneFormToneUrl) || TONE_PRESETS[0];
+    const matchedPreset = TONE_PRESETS.find((p) => p.url === ringtoneFormToneUrl) || {
+      id: 'custom-file',
+      name: ringtoneFormName.trim(),
+      subtitle: 'Audio from device storage',
+      url: ringtoneFormToneUrl,
+      category: 'custom' as any,
+      icon: 'musical-notes',
+      color: '#208AEF',
+    };
 
     if (editingRingtoneId) {
       dispatch(
@@ -975,6 +1026,56 @@ export default function ProfileScreen() {
             />
           </View>
 
+          {/* Voice Alert Setting */}
+          <View style={styles.menuItem}>
+            <View style={styles.menuItemLeft}>
+              <View style={[styles.menuIcon, { backgroundColor: '#ECFDF5' }]}>
+                <Ionicons name="mic" size={18} color="#059669" />
+              </View>
+              <View style={{ flex: 1, paddingRight: 6 }}>
+                <Text style={styles.menuText}>Spoken Medicine Voice Alert</Text>
+                <Text style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>
+                  Speaks &quot;Take your medicine [Name]!&quot; repeatedly during alarm
+                </Text>
+              </View>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  if (isPlayingVoicePreview) {
+                    stopVoiceAlert();
+                    setIsPlayingVoicePreview(false);
+                  } else {
+                    previewVoiceAlert('Aspirin');
+                    setIsPlayingVoicePreview(true);
+                    setTimeout(() => setIsPlayingVoicePreview(false), 4500);
+                  }
+                }}
+                style={{
+                  paddingHorizontal: 8,
+                  paddingVertical: 5,
+                  borderRadius: 8,
+                  backgroundColor: isPlayingVoicePreview ? '#FEE2E2' : '#F1F5F9',
+                }}
+                accessibilityLabel="Test Voice Alert">
+                <Ionicons
+                  name={isPlayingVoicePreview ? 'stop' : 'volume-high'}
+                  size={15}
+                  color={isPlayingVoicePreview ? '#EF4444' : '#059669'}
+                />
+              </TouchableOpacity>
+              <Switch
+                value={isVoiceAlertActive}
+                onValueChange={(val) => {
+                  dispatch(setVoiceAlertEnabled(val));
+                  setVoiceAlertGlobalEnabled(val);
+                }}
+                trackColor={{ false: '#CBD5E1', true: '#A7F3D0' }}
+                thumbColor={isVoiceAlertActive ? '#059669' : '#F1F5F9'}
+              />
+            </View>
+          </View>
+
           <TouchableOpacity
             style={styles.menuItem}
             activeOpacity={0.7}
@@ -1423,9 +1524,87 @@ export default function ProfileScreen() {
                 </View>
               </View>
 
-              {/* Sound Preset Picker */}
+              {/* Sound Source: Device File Picker or Presets */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Select Sound Tone Preset</Text>
+                <Text style={styles.inputLabel}>Sound Tone</Text>
+
+                {/* Pick From Device Button */}
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: '#EFF6FF',
+                    borderWidth: 1.5,
+                    borderStyle: 'dashed',
+                    borderColor: '#3B82F6',
+                    borderRadius: 12,
+                    paddingVertical: 12,
+                    paddingHorizontal: 14,
+                    gap: 12,
+                    marginBottom: 10,
+                  }}
+                  onPress={handlePickDeviceAudio}
+                  activeOpacity={0.75}>
+                  <View
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 10,
+                      backgroundColor: '#DBEAFE',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                    <Ionicons name="folder-open" size={22} color="#2563EB" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#1D4ED8' }}>
+                      Pick Audio File from Device
+                    </Text>
+                    <Text style={{ fontSize: 11, color: '#60A5FA', marginTop: 1 }}>
+                      Choose MP3, WAV, M4A, OGG from your phone storage
+                    </Text>
+                  </View>
+                  <Ionicons name="cloud-upload-outline" size={18} color="#2563EB" />
+                </TouchableOpacity>
+
+                {/* Selected File Display & Test */}
+                {selectedDeviceAudioFileName && (
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      backgroundColor: '#F0FDF4',
+                      borderWidth: 1,
+                      borderColor: '#86EFAC',
+                      borderRadius: 10,
+                      padding: 10,
+                      marginBottom: 12,
+                      gap: 8,
+                    }}>
+                    <Ionicons name="checkmark-circle" size={18} color="#16A34A" />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#15803D' }} numberOfLines={1}>
+                        Device Audio: {selectedDeviceAudioFileName}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => handleTogglePreview(ringtoneFormToneUrl, 'device-preview')}
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 5,
+                        borderRadius: 6,
+                        backgroundColor: playingRingtoneId === 'device-preview' ? '#EF4444' : '#22C55E',
+                      }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#FFFFFF' }}>
+                        {playingRingtoneId === 'device-preview' ? 'Stop' : 'Test Audio'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                <Text style={[styles.inputLabel, { marginTop: 6, marginBottom: 8 }]}>
+                  Or Select Sound Tone Preset
+                </Text>
                 <View style={styles.tonePresetsContainer}>
                   {TONE_PRESETS.map((preset) => {
                     const isSelected = ringtoneFormToneUrl === preset.url;

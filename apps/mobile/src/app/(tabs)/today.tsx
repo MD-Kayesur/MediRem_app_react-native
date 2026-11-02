@@ -205,7 +205,7 @@ export default function HomeScreen() {
         const key = `today_${item.id}_${currentTime.toDateString()}_${item.time}`;
         if (!todayAlarmedRef.current.has(key)) {
           todayAlarmedRef.current.add(key);
-          triggerAudibleAlarm();
+          triggerAudibleAlarm(item.medicationName || 'Medication');
         }
       }
     });
@@ -249,7 +249,7 @@ export default function HomeScreen() {
   };
 
   const handleTestDoseAlarm = (item: DoseItem) => {
-    triggerAudibleAlarm();
+    triggerAudibleAlarm(item.medicationName || 'Medication');
     Alert.alert(
       `🚨 Alarm: ${item.medicationName} (${item.dosage})`,
       `Alarm ringing continuously for 1 full minute. If not stopped permanently, it will alarm again in 3 minutes.`,
