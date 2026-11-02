@@ -28,6 +28,12 @@ import {
   syncOfflineQueue,
   checkIsOnline,
 } from '@/utils/offlineSync';
+import {
+  getTimeGreetingThemeDetails,
+  getThemePreference,
+  saveThemePreference,
+  ThemePreference,
+} from '@/utils/timeGreetingTheme';
 
 interface DoseItem {
   id: string;
@@ -144,6 +150,19 @@ export default function HomeScreen() {
   const [currentTime, setCurrentTime] = useState(() => new Date());
   const [cachedMeds, setCachedMeds] = useState<any[]>([]);
   const [isOnlineState, setIsOnlineState] = useState(true);
+  const [themePref, setThemePref] = useState<ThemePreference>('auto');
+
+  // Load saved theme preference on mount
+  useEffect(() => {
+    getThemePreference().then((pref) => {
+      setThemePref(pref);
+    });
+  }, []);
+
+  // Dynamic automatic greeting & day/evening/night theme calculated on every second
+  const timeTheme = useMemo(() => {
+    return getTimeGreetingThemeDetails(currentTime, themePref);
+  }, [currentTime, themePref]);
 
   // Load offline cached medications on mount & sync queue when online
   useEffect(() => {
@@ -308,6 +327,31 @@ export default function HomeScreen() {
     );
   };
 
+  const handleToggleTheme = async () => {
+    // Cycle: auto -> light -> evening -> dark -> auto
+    let nextPref: ThemePreference = 'auto';
+    if (themePref === 'auto') nextPref = 'light';
+    else if (themePref === 'light') nextPref = 'evening';
+    else if (themePref === 'evening') nextPref = 'dark';
+    else nextPref = 'auto';
+
+    setThemePref(nextPref);
+    await saveThemePreference(nextPref);
+
+    const modeLabels: Record<ThemePreference, string> = {
+      auto: 'Automatic 🕒 (Morning ☀️, Noon 🌤️, Evening 🌇, Night 🌙)',
+      light: 'Light Theme ☀️ (Daytime Light)',
+      evening: 'Twilight Theme 🌇 (Soft Evening Dark)',
+      dark: 'Dark Theme 🌙 (Full Night Dark)',
+    };
+
+    Alert.alert(
+      'Theme Mode',
+      `Current: ${modeLabels[nextPref]}\n\nIn 'Auto' mode, your greeting and theme update automatically with the clock throughout the day.`,
+      [{ text: 'OK' }]
+    );
+  };
+
   const getSlotDetails = (slot: DoseItem['timeSlot']) => {
     switch (slot) {
       case 'Morning':
@@ -325,22 +369,29 @@ export default function HomeScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white dark:bg-slate-900" style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: timeTheme.colors.background }]}>
       {/* Top Header */}
-      <View className="px-5 pt-2 pb-3" style={styles.header}>
+      <View className="px-5 pt-2 pb-3" style={[styles.header, { backgroundColor: timeTheme.colors.headerBg }]}>
         <View className="flex-row justify-between items-center" style={styles.headerRow}>
           <TouchableOpacity
             className="flex-row items-center gap-3"
             style={styles.avatarRow}
             onPress={() => router.push('/(tabs)/profile')}
             activeOpacity={0.8}>
-            <View className="w-12 h-12 rounded-full bg-blue-50 dark:bg-slate-800 items-center justify-center border border-primary" style={styles.avatarCircle}>
+            <View
+              className="w-12 h-12 rounded-full items-center justify-center border border-primary"
+              style={[
+                styles.avatarCircle,
+                { backgroundColor: timeTheme.isDark || timeTheme.isEvening ? '#1E293B' : '#E6F4FE' },
+              ]}>
               <Ionicons name="person" size={20} color="#208AEF" />
             </View>
             <View className="justify-center">
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text className="text-xs font-medium text-slate-500 dark:text-slate-400" style={styles.userSubtitle}>
-                  Good Morning, ☀️
+                <Text
+                  className="text-xs font-medium"
+                  style={[styles.userSubtitle, { color: timeTheme.colors.textSecondary }]}>
+                  {timeTheme.greetingText}, {timeTheme.emoji}
                 </Text>
                 <View
                   style={{
@@ -350,9 +401,13 @@ export default function HomeScreen() {
                     paddingHorizontal: 6,
                     paddingVertical: 1,
                     borderRadius: 8,
-                    backgroundColor: isOnlineState ? '#ECFDF5' : '#FEF3C7',
+                    backgroundColor: isOnlineState
+                      ? (timeTheme.isDark ? '#064E3B40' : '#ECFDF5')
+                      : (timeTheme.isDark ? '#78350F40' : '#FEF3C7'),
                     borderWidth: 1,
-                    borderColor: isOnlineState ? '#A7F3D0' : '#FDE68A',
+                    borderColor: isOnlineState
+                      ? (timeTheme.isDark ? '#05966960' : '#A7F3D0')
+                      : (timeTheme.isDark ? '#D9770660' : '#FDE68A'),
                   }}>
                   <View
                     style={{
@@ -372,10 +427,16 @@ export default function HomeScreen() {
                   </Text>
                 </View>
               </View>
-              <Text className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight" style={styles.userName}>
+              <Text
+                className="text-xl font-extrabold tracking-tight"
+                style={[styles.userName, { color: timeTheme.colors.textPrimary }]}>
                 {user?.name || 'Friend'}
               </Text>
-              <Text className="text-xs text-slate-400" style={styles.userStatus}>Stay healthy, stay strong!</Text>
+              <Text
+                className="text-xs"
+                style={[styles.userStatus, { color: timeTheme.colors.textSecondary }]}>
+                Stay healthy, stay strong!
+              </Text>
             </View>
           </TouchableOpacity>
 
@@ -388,11 +449,35 @@ export default function HomeScreen() {
               />
             </TouchableOpacity>
             <TouchableOpacity
-              className="w-11 h-11 rounded-full items-center justify-center bg-slate-100 dark:bg-slate-800 relative"
-              style={styles.bellBtn}
-              activeOpacity={0.7}>
-              <Ionicons name="notifications-outline" size={21} color="#64748B" />
-              <View className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-rose-500" style={styles.bellDot} />
+              onPress={handleToggleTheme}
+              style={[
+                styles.themeBtn,
+                {
+                  backgroundColor: timeTheme.colors.surfaceBg,
+                  borderColor: timeTheme.colors.cardBorder,
+                },
+              ]}
+              activeOpacity={0.75}
+              accessibilityLabel="Switch Day/Night Theme">
+              <Ionicons name={timeTheme.iconName} size={21} color={timeTheme.iconColor} />
+              {themePref === 'auto' && (
+                <View
+                  style={[
+                    styles.themeAutoBadge,
+                    {
+                      backgroundColor: timeTheme.colors.badgeBg,
+                      borderColor: timeTheme.colors.badgeBorder,
+                    },
+                  ]}>
+                  <Text
+                    style={[
+                      styles.themeAutoBadgeText,
+                      { color: timeTheme.colors.badgeText },
+                    ]}>
+                    A
+                  </Text>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -412,24 +497,60 @@ export default function HomeScreen() {
           />
         }>
         {/* Today's Progress Card */}
-        <View className="flex-row items-center p-4 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 my-3 gap-4" style={styles.progressCard}>
+        <View
+          style={[
+            styles.progressCard,
+            {
+              backgroundColor: timeTheme.colors.card,
+              borderColor: timeTheme.colors.cardBorder,
+            },
+          ]}>
           <View className="items-center justify-center">
-            <View className="w-20 h-20 rounded-full border-4 border-emerald-500 items-center justify-center bg-emerald-50 dark:bg-emerald-950/40" style={styles.progressCircle}>
-              <Text className="text-lg font-extrabold text-slate-900 dark:text-white" style={styles.progressNum}>
+            <View
+              style={[
+                styles.progressCircle,
+                {
+                  borderColor: '#10B981',
+                  backgroundColor: timeTheme.isDark || timeTheme.isEvening ? '#064E3B30' : '#DCFCE7',
+                },
+              ]}>
+              <Text
+                style={[
+                  styles.progressNum,
+                  { color: timeTheme.colors.textPrimary },
+                ]}>
                 {takenCount}/{totalCount}
               </Text>
-              <Text className="text-[10px] font-medium text-slate-500" style={styles.progressSub}>doses taken</Text>
+              <Text
+                style={[
+                  styles.progressSub,
+                  { color: timeTheme.colors.textSecondary },
+                ]}>
+                doses taken
+              </Text>
             </View>
           </View>
 
           <View className="flex-1 justify-center" style={{ flex: 1 }}>
-            <Text className="text-base font-bold text-slate-900 dark:text-white mb-0.5" style={styles.progressTitle}>
+            <Text
+              style={[
+                styles.progressTitle,
+                { color: timeTheme.colors.textPrimary },
+              ]}>
               {"Today's Progress"}
             </Text>
-            <Text className="text-sm font-bold text-emerald-600 mb-0.5" style={styles.progressPercent}>
+            <Text
+              style={[
+                styles.progressPercent,
+                { color: '#10B981' },
+              ]}>
               {progressPercent}% Complete
             </Text>
-            <Text className="text-xs text-slate-500 leading-4" style={styles.progressEncourage}>
+            <Text
+              style={[
+                styles.progressEncourage,
+                { color: timeTheme.colors.textSecondary },
+              ]}>
               {takenCount === totalCount
                 ? 'All medications taken! Great job!'
                 : `${totalCount - takenCount} doses remaining today.`}
@@ -439,11 +560,15 @@ export default function HomeScreen() {
 
         {/* Today's Schedule Header */}
         <View className="flex-row justify-between items-center mt-4 mb-3" style={styles.sectionHeader}>
-          <Text className="text-lg font-bold text-slate-900 dark:text-white" style={styles.sectionTitle}>
+          <Text
+            style={[
+              styles.sectionTitle,
+              { color: timeTheme.colors.textPrimary },
+            ]}>
             {"Today's Schedule"}
           </Text>
           <TouchableOpacity onPress={() => router.push('/(tabs)/meds')} activeOpacity={0.7}>
-            <Text className="text-sm font-semibold text-primary" style={{ color: '#208AEF', fontWeight: '600' }}>View All</Text>
+            <Text className="text-sm font-semibold" style={{ color: '#208AEF', fontWeight: '600' }}>View All</Text>
           </TouchableOpacity>
         </View>
 
@@ -457,19 +582,21 @@ export default function HomeScreen() {
             return (
               <View
                 key={`${item.id}_${idx}`}
-                className={`flex-row items-center justify-between p-4 rounded-2xl border ${
-                  isTaken
-                    ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50/20 dark:bg-slate-800/90'
-                    : 'border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-800/80 shadow-sm'
-                }`}
                 style={[
                   styles.doseCard,
-                  isTaken ? styles.doseCardTaken : styles.doseCardPending,
+                  isTaken
+                    ? (timeTheme.isDark || timeTheme.isEvening
+                        ? { backgroundColor: '#064E3B20', borderColor: '#05966950' }
+                        : styles.doseCardTaken)
+                    : {
+                        backgroundColor: timeTheme.colors.card,
+                        borderColor: timeTheme.colors.cardBorder,
+                      },
                 ]}>
                 {/* Left Slot Indicator & Details */}
                 <View className="flex-row items-center gap-3.5 flex-1" style={styles.doseLeft}>
                   {item.imageUri ? (
-                    <View style={styles.dosePhotoContainer}>
+                    <View style={[styles.dosePhotoContainer, { borderColor: timeTheme.colors.cardBorder }]}>
                       <Image source={{ uri: item.imageUri }} style={styles.dosePhoto} resizeMode="cover" />
                       <View style={[styles.dosePhotoBadge, { backgroundColor: slotInfo.bg }]}>
                         <Ionicons name={slotInfo.icon} size={10} color={slotInfo.color} />
@@ -485,7 +612,7 @@ export default function HomeScreen() {
 
                   <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                      <Text className="text-xs font-medium text-slate-400" style={styles.doseTime}>
+                      <Text style={[styles.doseTime, { color: timeTheme.colors.textSecondary }]}>
                         {item.timeSlot} ({item.time})
                       </Text>
                       {!isTaken && (
@@ -520,9 +647,13 @@ export default function HomeScreen() {
                         </TouchableOpacity>
                       )}
                     </View>
-                    <Text className="text-base font-bold text-slate-900 dark:text-white" style={styles.doseMedName}>
+                    <Text
+                      style={[
+                        styles.doseMedName,
+                        { color: isTaken ? (timeTheme.isDark ? '#94A3B8' : '#64748B') : timeTheme.colors.textPrimary },
+                      ]}>
                       {item.medicationName}{' '}
-                      <Text className="text-sm font-normal text-slate-500" style={styles.doseMedDosage}>{item.dosage}</Text>
+                      <Text style={[styles.doseMedDosage, { color: timeTheme.colors.textSecondary }]}>{item.dosage}</Text>
                     </Text>
                   </View>
                 </View>
@@ -627,23 +758,34 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#94A3B8',
   },
-  bellBtn: {
+  themeBtn: {
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
     position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  bellDot: {
+  themeAutoBadge: {
     position: 'absolute',
-    top: 9,
-    right: 9,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#EF4444',
+    bottom: -2,
+    right: -2,
+    width: 15,
+    height: 15,
+    borderRadius: 7.5,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  themeAutoBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
   },
   scrollContent: {
     paddingHorizontal: 20,

@@ -40,7 +40,6 @@ export default function ForgotPasswordScreen() {
   const isLoading = isSendingCode || isVerifyingCode || isResettingPassword;
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
-  const [receivedCode, setReceivedCode] = useState<string | null>(null);
 
   // Step 1: Send 6-digit Code via Nodemailer & Redux
   const handleSendCode = async () => {
@@ -55,9 +54,6 @@ export default function ForgotPasswordScreen() {
 
     try {
       const result = await forgotPasswordApi({ email: cleanEmail }).unwrap();
-      if ((result as any)?.code) {
-        setReceivedCode((result as any).code);
-      }
       setInfoMessage(result.message || `Verification code sent to ${cleanEmail}.`);
       setStep('verify');
     } catch (err: any) {
@@ -258,14 +254,14 @@ export default function ForgotPasswordScreen() {
                 </View>
               )}
 
-              {receivedCode && (
+              {/* {receivedCode && (
                 <View style={styles.infoBanner}>
                   <Ionicons name="key-outline" size={16} color="#0284C7" />
                   <Text style={styles.infoBannerText}>
                     Dev Code: <Text style={{ fontWeight: '800' }}>{receivedCode}</Text> (sent via Nodemailer)
                   </Text>
                 </View>
-              )}
+              )} */}
 
               {errorMessage && (
                 <View style={styles.errorBanner}>

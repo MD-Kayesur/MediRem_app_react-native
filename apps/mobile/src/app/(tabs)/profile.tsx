@@ -43,6 +43,12 @@ import {
   setVoiceAlertGlobalEnabled,
 } from '@/utils/alarm';
 import { clearUserSession } from '@/utils/authStorage';
+import {
+  getTimeGreetingThemeDetails,
+  getThemePreference,
+  saveThemePreference,
+  ThemePreference,
+} from '@/utils/timeGreetingTheme';
 
 const TONE_PRESETS = [
   {
@@ -182,6 +188,38 @@ export default function ProfileScreen() {
   const [playingRingtoneId, setPlayingRingtoneId] = useState<string | null>(null);
   const [isPlayingVoicePreview, setIsPlayingVoicePreview] = useState(false);
   const [selectedDeviceAudioFileName, setSelectedDeviceAudioFileName] = useState<string | null>(null);
+
+  // Theme & Dynamic Time Greeting State
+  const [themePref, setThemePref] = useState<ThemePreference>('auto');
+  const [profileTime, setProfileTime] = useState(() => new Date());
+
+  useEffect(() => {
+    getThemePreference().then((pref) => setThemePref(pref));
+    const timer = setInterval(() => setProfileTime(new Date()), 10000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const timeTheme = getTimeGreetingThemeDetails(profileTime, themePref);
+
+  const handleCycleTheme = async () => {
+    let next: ThemePreference = 'auto';
+    if (themePref === 'auto') next = 'light';
+    else if (themePref === 'light') next = 'evening';
+    else if (themePref === 'evening') next = 'dark';
+    else next = 'auto';
+
+    setThemePref(next);
+    await saveThemePreference(next);
+
+    const labels: Record<ThemePreference, string> = {
+      auto: 'Automatic 🕒 (Changes with Morning, Noon, Evening, Night)',
+      light: 'Light Mode ☀️ (Daytime Light)',
+      evening: 'Twilight Mode 🌇 (Evening Twilight)',
+      dark: 'Dark Mode 🌙 (Night Dark)',
+    };
+
+    Alert.alert('Theme Updated', `Active theme is now: ${labels[next]}`);
+  };
 
   useEffect(() => {
     setVoiceAlertGlobalEnabled(isVoiceAlertActive);
@@ -576,17 +614,40 @@ export default function ProfileScreen() {
         <Text className="text-2xl font-black text-slate-900 dark:text-white" style={styles.headerTitle}>
           Profile
         </Text>
-        <TouchableOpacity
-          onPress={() => refetch()}
-          style={styles.refreshIconBtn}
-          activeOpacity={0.7}
-          accessibilityLabel="Refresh profile">
-          <Ionicons
-            name="refresh"
-            size={20}
-            color={isProfileFetching ? '#208AEF' : '#64748B'}
-          />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <TouchableOpacity
+            onPress={handleCycleTheme}
+            style={[
+              styles.headerThemeBtn,
+              {
+                backgroundColor: timeTheme.colors.surfaceBg,
+                borderColor: timeTheme.colors.cardBorder,
+              },
+            ]}
+            activeOpacity={0.75}
+            accessibilityLabel="Switch Day/Night Theme">
+            <Ionicons name={timeTheme.iconName} size={19} color={timeTheme.iconColor} />
+            {themePref === 'auto' && (
+              <View
+                style={[
+                  styles.headerThemeAutoDot,
+                  { backgroundColor: timeTheme.iconColor },
+                ]}
+              />
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => refetch()}
+            style={styles.refreshIconBtn}
+            activeOpacity={0.7}
+            accessibilityLabel="Refresh profile">
+            <Ionicons
+              name="refresh"
+              size={20}
+              color={isProfileFetching ? '#208AEF' : '#64748B'}
+            />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -1087,6 +1148,36 @@ export default function ProfileScreen() {
               <Text style={styles.menuText}>Manage Medications ({medicationsCount})</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+          </TouchableOpacity>
+
+          {/* Dynamic Day & Night Theme Setting */}
+          <TouchableOpacity
+            style={styles.menuItem}
+            activeOpacity={0.75}
+            onPress={handleCycleTheme}>
+            <View style={styles.menuItemLeft}>
+              <View style={[styles.menuIcon, { backgroundColor: timeTheme.colors.surfaceBg, borderWidth: 1, borderColor: timeTheme.colors.cardBorder }]}>
+                <Ionicons name={timeTheme.iconName} size={18} color={timeTheme.iconColor} />
+              </View>
+              <View style={{ flex: 1, paddingRight: 6 }}>
+                <Text style={styles.menuText}>Day & Night Theme Mode</Text>
+                <Text style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>
+                  {themePref === 'auto'
+                    ? `Auto: ${timeTheme.greetingText} (${timeTheme.emoji})`
+                    : themePref === 'light'
+                    ? 'Day Light Mode ☀️'
+                    : themePref === 'evening'
+                    ? 'Evening Twilight 🌇'
+                    : 'Night Dark Mode 🌙'}
+                </Text>
+              </View>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: timeTheme.iconColor }}>
+                {themePref === 'auto' ? 'Auto 🕒' : themePref.toUpperCase()}
+              </Text>
+              <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
+            </View>
           </TouchableOpacity>
         </View>
 
@@ -1873,6 +1964,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  headerThemeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    position: 'relative',
+  },
+  headerThemeAutoDot: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   scrollContent: {
     paddingHorizontal: 20,
