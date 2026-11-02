@@ -177,24 +177,8 @@ export default function HistoryScreen() {
             </View>
           </View>
 
-          {/* Quick Refresh Icon & Theme Button */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <ThemeHeaderButton size={36} />
-            <TouchableOpacity
-              onPress={() => refetch()}
-              style={[
-                styles.refreshIconBtn,
-                {
-                  backgroundColor: timeTheme.colors.surfaceBg,
-                  borderColor: timeTheme.colors.cardBorder,
-                  borderWidth: 1,
-                },
-              ]}
-              activeOpacity={0.7}
-              accessibilityLabel="Refresh history">
-              <Ionicons name={isFetching ? 'sync' : 'refresh'} size={16} color="#208AEF" />
-            </TouchableOpacity>
-          </View>
+          {/* Theme Button */}
+          <ThemeHeaderButton size={36} />
         </View>
 
         {/* Date Switcher Bar with All-Dates Mode */}
@@ -236,19 +220,25 @@ export default function HistoryScreen() {
         {/* Filter Chips Row */}
         <View className="flex-row gap-2" style={styles.filterRow}>
           <TouchableOpacity
-            className={`px-3 py-1 rounded-full border ${
-              isAllDatesMode
-                ? 'bg-blue-50 border-primary dark:bg-slate-800'
-                : 'bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-800'
-            }`}
             style={[
               styles.filterChip,
-              isAllDatesMode ? styles.filterChipActive : styles.filterChipInactive,
+              {
+                backgroundColor: isAllDatesMode
+                  ? (timeTheme.isDark ? '#0284C725' : '#E6F4FE')
+                  : (timeTheme.isDark ? '#1E293B' : '#FFFFFF'),
+                borderColor: isAllDatesMode
+                  ? '#208AEF'
+                  : (timeTheme.isDark ? '#334155' : '#E2E8F0'),
+              },
             ]}
+            activeOpacity={0.7}
             onPress={() => setIsAllDatesMode(!isAllDatesMode)}>
             <Text
-              className="text-xs font-semibold"
-              style={{ color: isAllDatesMode ? '#208AEF' : '#64748B' }}>
+              style={{
+                fontSize: 12,
+                fontWeight: '600',
+                color: isAllDatesMode ? '#208AEF' : (timeTheme.isDark ? '#94A3B8' : '#64748B'),
+              }}>
               {isAllDatesMode ? '✓ All Dates' : 'All Dates'}
             </Text>
           </TouchableOpacity>
@@ -258,19 +248,26 @@ export default function HistoryScreen() {
             return (
               <TouchableOpacity
                 key={tab}
-                className={`px-3 py-1 rounded-full border ${
-                  isActive
-                    ? 'bg-blue-50 border-primary dark:bg-slate-800'
-                    : 'bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-800'
-                }`}
                 style={[
                   styles.filterChip,
-                  isActive ? styles.filterChipActive : styles.filterChipInactive,
+                  {
+                    backgroundColor: isActive
+                      ? (timeTheme.isDark ? '#0284C725' : '#E6F4FE')
+                      : (timeTheme.isDark ? '#1E293B' : '#FFFFFF'),
+                    borderColor: isActive
+                      ? '#208AEF'
+                      : (timeTheme.isDark ? '#334155' : '#E2E8F0'),
+                  },
                 ]}
+                activeOpacity={0.7}
                 onPress={() => setFilter(tab)}>
                 <Text
-                  className="text-xs font-semibold capitalize"
-                  style={{ color: isActive ? '#208AEF' : '#64748B' }}>
+                  style={{
+                    fontSize: 12,
+                    fontWeight: '600',
+                    textTransform: 'capitalize',
+                    color: isActive ? '#208AEF' : (timeTheme.isDark ? '#94A3B8' : '#64748B'),
+                  }}>
                   {tab === 'all' ? 'All Status' : tab}
                 </Text>
               </TouchableOpacity>
@@ -294,10 +291,31 @@ export default function HistoryScreen() {
           />
         }>
         {filteredLogs.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Ionicons name="clipboard-outline" size={42} color="#94A3B8" />
-            <Text style={styles.emptyTitle}>No Dose Logs Found</Text>
-            <Text style={styles.emptySub}>
+          <View
+            style={[
+              styles.emptyCard,
+              {
+                backgroundColor: timeTheme.colors.card,
+                borderColor: timeTheme.colors.cardBorder,
+              },
+            ]}>
+            <Ionicons
+              name="clipboard-outline"
+              size={42}
+              color={timeTheme.isDark ? '#64748B' : '#94A3B8'}
+            />
+            <Text
+              style={[
+                styles.emptyTitle,
+                { color: timeTheme.colors.textPrimary },
+              ]}>
+              No Dose Logs Found
+            </Text>
+            <Text
+              style={[
+                styles.emptySub,
+                { color: timeTheme.colors.textSecondary },
+              ]}>
               {isAllDatesMode
                 ? 'No dose intake has been recorded yet. Take doses on the Today screen or during alarms to automatically log them in Neon Database!'
                 : `No doses logged for ${dates[currentDateIndex]}. Tap "All Dates" above to see complete history.`}
@@ -576,16 +594,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 40,
     paddingHorizontal: 24,
-    backgroundColor: '#F8FAFC',
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
     marginTop: 10,
   },
   emptyTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#334155',
     marginTop: 12,
   },
   emptySub: {

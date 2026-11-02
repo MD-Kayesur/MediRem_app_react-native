@@ -599,27 +599,7 @@ export default function ProfileScreen() {
           ]}>
           Profile
         </Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <ThemeHeaderButton size={36} />
-          <TouchableOpacity
-            onPress={() => refetch()}
-            style={[
-              styles.refreshIconBtn,
-              {
-                backgroundColor: timeTheme.colors.surfaceBg,
-                borderColor: timeTheme.colors.cardBorder,
-                borderWidth: 1,
-              },
-            ]}
-            activeOpacity={0.7}
-            accessibilityLabel="Refresh profile">
-            <Ionicons
-              name="refresh"
-              size={18}
-              color={isProfileFetching ? '#208AEF' : (timeTheme.isDark ? '#94A3B8' : '#64748B')}
-            />
-          </TouchableOpacity>
-        </View>
+        <ThemeHeaderButton size={36} />
       </View>
 
       <ScrollView
