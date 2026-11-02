@@ -175,3 +175,4 @@ export async function getThemePreference(): Promise<ThemePreference> {
   }
   return 'auto';
 }
+
