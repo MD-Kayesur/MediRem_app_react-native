@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useAppSelector } from '@/redux/hooks';
+import { selectCurrentUser } from '@/redux/slices/authSlice';
+import { useGetMedicationsQuery, useSendChatMessageMutation } from '@/redux';
 
 interface ChatMessage {
   id: string;
@@ -21,107 +24,7 @@ interface ChatMessage {
   timestamp: string;
   category?: string;
   quickReplies?: string[];
-}
-
-const INITIAL_MESSAGES: ChatMessage[] = [
-  {
-    id: 'welcome-1',
-    sender: 'ai',
-    text: "Hello! 👋 I'm your **MediRem AI Assistant**.\n\nI can help you with medication schedules, side effects, drug interactions, food advice, and what to do if you miss a dose.\n\nHow can I help you today?",
-    timestamp: 'Just now',
-    quickReplies: [
-      '💊 Metformin with food?',
-      '⏰ Missed dose advice',
-      '⚠️ Check interactions',
-      '💧 Vitamin D3 timing',
-    ],
-  },
-];
-
-const SUGGESTION_CHIPS = [
-  { label: '💊 Metformin advice', query: 'When and how should I take Metformin?' },
-  { label: '⏰ Missed dose', query: 'What should I do if I miss a scheduled medication dose?' },
-  { label: '⚠️ Drug interactions', query: 'Can I take Paracetamol and Metformin together?' },
-  { label: '💧 Vitamin D3', query: 'What is the best time and way to take Vitamin D3?' },
-  { label: '🍎 Foods to avoid', query: 'What foods or drinks should I avoid with Atorvastatin?' },
-  { label: '🔔 Alarm features', query: 'How does MediRem loud alarm and 3-minute repeat work?' },
-];
-
-function getBotResponse(userQuery: string): { text: string; quickReplies?: string[] } {
-  const query = userQuery.toLowerCase().trim();
-
-  if (query.includes('metformin')) {
-    return {
-      text: "💊 **Metformin (Glucophage) Guide:**\n\n• **Best Timing:** Take with or right after your main meals (lunch or dinner). This significantly reduces stomach upset or nausea.\n• **Form:** If taking extended-release (XR), swallow whole—never crush or chew it.\n• **Alcohol:** Avoid heavy alcohol use as it increases lactic acidosis risk.\n• **Missed Dose:** Take as soon as you remember with a meal. If close to your next dose, skip it. Never double up!",
-      quickReplies: ['Check Metformin side effects', 'Foods to avoid with Metformin'],
-    };
-  }
-
-  if (query.includes('paracetamol') || query.includes('napa') || query.includes('acetaminophen') || query.includes('panadol')) {
-    return {
-      text: "💊 **Paracetamol (Acetaminophen / Napa) Guide:**\n\n• **Usage:** Relieves mild-to-moderate pain and reduces fever.\n• **Safe Dosage:** 500mg to 1000mg per dose, every 4 to 6 hours as needed.\n• **Maximum Limit:** **Never exceed 4,000mg (8 x 500mg tablets)** in 24 hours to prevent severe liver damage.\n• **Food:** Can be taken with or without food.\n• **Caution:** Check other cold/cough remedies to ensure you aren't unintentionally doubling acetaminophen.",
-      quickReplies: ['Can I take with food?', 'What if fever persists?'],
-    };
-  }
-
-  if (query.includes('vitamin d') || query.includes('d3')) {
-    return {
-      text: "☀️ **Vitamin D3 (Cholecalciferol) Guide:**\n\n• **Best Timing:** Take in the morning or early afternoon with a meal that contains healthy dietary fats (e.g. eggs, yogurt, nuts, or avocado).\n• **Why with fat?** Vitamin D3 is fat-soluble; taking it with dietary fat boosts absorption by up to 50%!\n• **Bedtime:** Avoid taking very late in the evening as some people report it interferes with melatonin and sleep.",
-      quickReplies: ['Calcium and Vitamin D3', 'Weekly vs Daily dose'],
-    };
-  }
-
-  if (query.includes('atorvastatin') || query.includes('lipitor') || query.includes('statin') || query.includes('cholesterol')) {
-    return {
-      text: "💊 **Atorvastatin (Lipitor) Guide:**\n\n• **Best Timing:** Usually taken once daily in the evening or at bedtime, when your liver synthesizes the most cholesterol.\n• **Grapefruit Warning:** ⚠️ Avoid drinking large amounts of grapefruit juice, as it can dangerously increase the medication level in your blood.\n• **Routine:** Can be taken with or without food.\n• **Doctor alert:** Let your doctor know promptly if you experience unexplained muscle pain or tenderness.",
-      quickReplies: ['Common side effects', 'Foods to lower cholesterol'],
-    };
-  }
-
-  if (query.includes('miss') || query.includes('forgot') || query.includes('late')) {
-    return {
-      text: "⏰ **What to Do If You Miss a Dose:**\n\n1. **Take it now:** If you just remembered and your next scheduled dose is several hours away, take your dose immediately.\n2. **Skip if close:** If it is almost time for your next regular dose, skip the missed dose and resume your normal schedule.\n3. **⚠️ NEVER Double Dose:** Never take two doses at the same time to compensate.\n4. **MediRem Alarms:** Keep the MediRem alarm enabled in the Meds tab so the loud 1-minute alert sounds automatically at your scheduled time.",
-      quickReplies: ['How to set alarm', 'Check my routine'],
-    };
-  }
-
-  if (query.includes('interact') || query.includes('together') || query.includes('mix')) {
-    return {
-      text: "🔍 **Drug Interaction Checker:**\n\n• **Metformin + Paracetamol:** Generally safe when taken at recommended doses.\n• **Paracetamol + Vitamin D3:** Safe; no known interactions.\n• **Metformin + Alcohol:** ⚠️ Avoid alcohol, as it increases lactic acidosis risk.\n• **Atorvastatin + Grapefruit:** ⚠️ Avoid grapefruit products.\n\n*Always inform your doctor or pharmacist of all prescription and OTC medicines you take.*",
-      quickReplies: ['Metformin interactions', 'Painkiller safety'],
-    };
-  }
-
-  if (query.includes('alarm') || query.includes('repeat') || query.includes('snooze') || query.includes('sound') || query.includes('ring')) {
-    return {
-      text: "🔔 **MediRem Alarm System Features:**\n\n• **Loud 1-Minute Ringing:** Rings continuously for 60 seconds with vibration when your dose time arrives.\n• **3-Minute Persistent Repeat:** If you don't take the dose, MediRem automatically sounds the alarm again every 3 minutes.\n• **Permanent Stop:** Tapping 'Take Dose' or 'Stop Alarm' permanently silences the alarm for today so it will not bother you again until tomorrow's dose.\n• **Test Alarm:** You can test the alarm anytime from the Meds tab!",
-      quickReplies: ['How to add a medication', 'Snooze settings'],
-    };
-  }
-
-  if (query.includes('side effect') || query.includes('allergy') || query.includes('dizzy') || query.includes('nausea')) {
-    return {
-      text: "⚠️ **Managing Medication Side Effects:**\n\n• **Common Mild Effects:** Mild stomach upset or light nausea often subsides after a few days as your body adapts. Taking medicine with food frequently helps.\n• **🚨 Emergency Warning Signs:** Seek emergency medical care immediately if you experience:\n  - Swelling of lips, face, or throat\n  - Difficulty breathing or wheezing\n  - Severe skin rash, hives, or blistering\n  - Severe chest pain or sudden weakness",
-      quickReplies: ['When to call a doctor', 'Food and stomach upset'],
-    };
-  }
-
-  if (query.includes('food') || query.includes('eat') || query.includes('water') || query.includes('empty stomach')) {
-    return {
-      text: "🍎 **Food & Medication Best Practices:**\n\n• **With Food:** Metformin, Aspirin, Ibuprofen, and Multivitamins (prevents stomach irritation).\n• **Empty Stomach (1h before or 2h after food):** Certain antibiotics (like Ampicillin) and Thyroid medications (Levothyroxine).\n• **With Water:** Always swallow pills with a full 8oz (250ml) glass of room-temperature water to ensure smooth passage into the stomach.\n• **Avoid:** Never wash down pills with hot coffee, carbonated sodas, or alcohol.",
-      quickReplies: ['Vitamin D3 timing', 'Missed dose advice'],
-    };
-  }
-
-  // Friendly Fallback
-  return {
-    text: `🤖 **MediRem Health Assistant:**\n\nThank you for asking about **"${userQuery}"**!\n\nHere are core medication safety guidelines:\n\n• **Exact Schedule:** Take medications at the exact same hour every day.\n• **Hydration:** Always take pills with a full glass of water.\n• **Proper Storage:** Store in a cool, dry place away from heat, direct sun, and moisture.\n• **Professional Advice:** For specific dosage adjustments, laboratory test results, or new symptoms, always consult your physician or licensed pharmacist.`,
-    quickReplies: [
-      '💊 Metformin advice',
-      '⏰ Missed dose rule',
-      '⚠️ Drug interactions',
-    ],
-  };
+  isLiveAi?: boolean;
 }
 
 let messageCounter = 0;
@@ -136,13 +39,101 @@ function getFormattedTime(): string {
 }
 
 export default function ChatScreen() {
-  const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
+  const user = useAppSelector(selectCurrentUser);
+  const activeUserId = user?.id;
+
+  // Real medications from Neon Cloud PostgreSQL for this specific user
+  const { data: dbMeds = [] } = useGetMedicationsQuery(activeUserId, {
+    refetchOnMountOrArgChange: true,
+  });
+
+  const [sendChatMessageMutation] = useSendChatMessageMutation();
+
+  const initialGreeting = useMemo<ChatMessage>(() => {
+    const patientName = user?.name || 'Friend';
+    const medsCount = dbMeds.length;
+    const medSummary =
+      medsCount > 0
+        ? `I have access to your **${medsCount}** scheduled medication(s) (${dbMeds.map((m) => m.name).join(', ')}).`
+        : 'You currently have no active medications in your schedule. You can add one in the Meds tab!';
+
+    return {
+      id: 'welcome-init',
+      sender: 'ai',
+      text: `Hello **${patientName}**! 👋 I'm your **MediRem AI Personal Medical Assistant**.\n\n${medSummary}\n\nAsk me anything about your dose schedules, instructions, remaining pills, side effects, or food guidelines!`,
+      timestamp: 'Just now',
+      quickReplies:
+        medsCount > 0
+          ? ['💊 What are my medications?', '⏰ Today schedule', '📦 Check pills left']
+          : ['📋 How to add medications?', '⏰ Missed dose rule', '🔔 Alarm features'],
+    };
+  }, [user?.name, dbMeds]);
+
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const scrollViewRef = useRef<any>(null);
   const [pulseAnim] = useState(() => new Animated.Value(1));
 
-  // Pulse animation for green online dot
+  // Dynamically derive messages with initial greeting when empty
+  const allMessages = useMemo<ChatMessage[]>(() => {
+    return messages.length === 0 ? [initialGreeting] : messages;
+  }, [messages, initialGreeting]);
+
+  // Dynamic Suggestion Chips tailored to this user's live database records
+  const dynamicChips = useMemo(() => {
+    const chips: { label: string; query: string }[] = [];
+
+    if (dbMeds && dbMeds.length > 0) {
+      chips.push({
+        label: '💊 My Schedule',
+        query: 'What medications am I scheduled to take today?',
+      });
+      chips.push({
+        label: '📦 Pills Left',
+        query: 'How many pills do I have remaining in my inventory?',
+      });
+      chips.push({
+        label: `⏰ ${dbMeds[0].name} Timing`,
+        query: `When and how should I take ${dbMeds[0].name}?`,
+      });
+      if (dbMeds.length > 1) {
+        chips.push({
+          label: `🔍 ${dbMeds[1].name} Instructions`,
+          query: `What are the dosage and instructions for ${dbMeds[1].name}?`,
+        });
+      }
+      chips.push({
+        label: '⚠️ Missed Dose',
+        query: 'What should I do if I miss a scheduled dose?',
+      });
+      chips.push({
+        label: '🍎 Food Advice',
+        query: 'Which of my medications should be taken with or after food?',
+      });
+    } else {
+      chips.push({
+        label: '📋 My Medications',
+        query: 'What medications do I have in my schedule?',
+      });
+      chips.push({
+        label: '⏰ Missed Dose Rule',
+        query: 'What should I do if I miss a scheduled dose?',
+      });
+      chips.push({
+        label: '🍎 Food & Medicine',
+        query: 'What medications must be taken with food?',
+      });
+      chips.push({
+        label: '🔔 MediRem Alarms',
+        query: 'How do MediRem alarms and repeat alerts work?',
+      });
+    }
+
+    return chips;
+  }, [dbMeds]);
+
+  // Pulse animation for online indicator
   useEffect(() => {
     const pulse = Animated.loop(
       Animated.sequence([
@@ -156,23 +147,23 @@ export default function ChatScreen() {
           duration: 900,
           useNativeDriver: true,
         }),
-      ])
+      ]),
     );
     pulse.start();
     return () => pulse.stop();
   }, [pulseAnim]);
 
-  // Scroll to bottom when messages update
+  // Scroll to bottom on new messages
   useEffect(() => {
     const timer = setTimeout(() => {
       scrollViewRef.current?.scrollToEnd({ animated: true });
     }, 150);
     return () => clearTimeout(timer);
-  }, [messages, isTyping]);
+  }, [allMessages, isTyping]);
 
-  const handleSendMessage = (textToSend?: string) => {
+  const handleSendMessage = async (textToSend?: string) => {
     const text = (textToSend || inputText).trim();
-    if (!text) return;
+    if (!text || isTyping) return;
 
     const userMsg: ChatMessage = {
       id: createUniqueId('user'),
@@ -185,33 +176,60 @@ export default function ChatScreen() {
     setInputText('');
     setIsTyping(true);
 
-    // Realistic bot response delay (600ms)
-    setTimeout(() => {
-      const response = getBotResponse(text);
+    try {
+      // Build conversation history (up to last 6 messages)
+      const conversationHistory = messages.slice(-6).map((m) => ({
+        sender: m.sender,
+        text: m.text,
+      }));
+
+      // Send to Backend AI API with strict User ID isolation
+      const res = await sendChatMessageMutation({
+        message: text,
+        userId: user?.id,
+        userEmail: user?.email,
+        conversationHistory,
+      }).unwrap();
+
       const aiMsg: ChatMessage = {
         id: createUniqueId('ai'),
         sender: 'ai',
-        text: response.text,
+        text: res.text,
         timestamp: getFormattedTime(),
-        quickReplies: response.quickReplies,
+        quickReplies: res.quickReplies,
+        isLiveAi: res.isLiveAi,
+      };
+
+      setMessages((prev) => [...prev, aiMsg]);
+    } catch {
+      // Offline fallback: Answer using client-cached database medications!
+      const fallbackReply = generateLocalDatabaseFallback(text, user, dbMeds);
+      const aiMsg: ChatMessage = {
+        id: createUniqueId('ai'),
+        sender: 'ai',
+        text: fallbackReply.text,
+        timestamp: getFormattedTime(),
+        quickReplies: fallbackReply.quickReplies,
+        isLiveAi: false,
       };
       setMessages((prev) => [...prev, aiMsg]);
+    } finally {
       setIsTyping(false);
-    }, 650);
+    }
   };
 
   const handleClearChat = () => {
     Alert.alert(
       'Reset Conversation?',
-      'Are you sure you want to clear this chat history?',
+      'Clear chat history and start a fresh session with your medical assistant?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Reset',
           style: 'destructive',
-          onPress: () => setMessages(INITIAL_MESSAGES),
+          onPress: () => setMessages([]),
         },
-      ]
+      ],
     );
   };
 
@@ -232,7 +250,9 @@ export default function ChatScreen() {
                 <Text style={styles.aiBadgeText}>Assistant</Text>
               </View>
             </View>
-            <Text style={styles.headerSubtitle}>24/7 Smart Medication Guide</Text>
+            <Text style={styles.headerSubtitle}>
+              {user?.name ? `${user.name}'s Medical Copilot` : '24/7 Smart Medication Guide'}
+            </Text>
           </View>
         </View>
 
@@ -251,7 +271,7 @@ export default function ChatScreen() {
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.chipsScroll}>
-          {SUGGESTION_CHIPS.map((chip, idx) => (
+          {dynamicChips.map((chip, idx) => (
             <TouchableOpacity
               key={idx}
               onPress={() => handleSendMessage(chip.query)}
@@ -269,7 +289,7 @@ export default function ChatScreen() {
         style={styles.messagesScroll}
         contentContainerStyle={styles.messagesContent}
         showsVerticalScrollIndicator={false}>
-        {messages.map((msg) => {
+        {allMessages.map((msg) => {
           const isAi = msg.sender === 'ai';
           return (
             <View
@@ -293,14 +313,21 @@ export default function ChatScreen() {
                 {/* Formatted Message Content */}
                 <FormattedText text={msg.text} isAi={isAi} />
 
-                {/* Timestamp */}
-                <Text
-                  style={[
-                    styles.timestamp,
-                    isAi ? styles.timestampAi : styles.timestampUser,
-                  ]}>
-                  {msg.timestamp}
-                </Text>
+                {/* Timestamp & Source badge */}
+                <View style={styles.metaRow}>
+                  <Text
+                    style={[
+                      styles.timestamp,
+                      isAi ? styles.timestampAi : styles.timestampUser,
+                    ]}>
+                    {msg.timestamp}
+                  </Text>
+                  {isAi && (
+                    <Text style={styles.aiSourceText}>
+                      {msg.isLiveAi ? '• Real AI' : '• Database'}
+                    </Text>
+                  )}
+                </View>
 
                 {/* Follow-up Quick Action Pills */}
                 {isAi && msg.quickReplies && msg.quickReplies.length > 0 && (
@@ -329,7 +356,7 @@ export default function ChatScreen() {
               <Ionicons name="sparkles" size={14} color="#208AEF" />
             </View>
             <View style={[styles.bubble, styles.bubbleAi, styles.typingBubble]}>
-              <Text style={styles.typingText}>MediRem AI is thinking...</Text>
+              <Text style={styles.typingText}>MediRem AI is analyzing records...</Text>
               <View style={styles.dotsRow}>
                 <View style={[styles.dot, styles.dot1]} />
                 <View style={[styles.dot, styles.dot2]} />
@@ -343,7 +370,7 @@ export default function ChatScreen() {
         <View style={styles.medicalDisclaimerCard}>
           <Ionicons name="shield-checkmark" size={14} color="#64748B" />
           <Text style={styles.medicalDisclaimerText}>
-            Informational advice only. In emergencies or severe symptoms, always contact a healthcare professional.
+            Personalized guidance based on your database regimen. In emergencies, contact a physician immediately.
           </Text>
         </View>
       </ScrollView>
@@ -354,7 +381,7 @@ export default function ChatScreen() {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
         <View style={styles.inputArea}>
           <TextInput
-            placeholder="Ask about medications, doses, timing..."
+            placeholder="Ask about your medications, schedule, stock..."
             placeholderTextColor="#94A3B8"
             value={inputText}
             onChangeText={setInputText}
@@ -372,16 +399,94 @@ export default function ChatScreen() {
               (!inputText.trim() || isTyping) && styles.sendButtonDisabled,
             ]}
             activeOpacity={0.8}>
-            <Ionicons
-              name="arrow-up"
-              size={20}
-              color="#FFFFFF"
-            />
+            <Ionicons name="arrow-up" size={20} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
+}
+
+/**
+ * Intelligent Local Fallback in case of network downtime
+ * Answers directly from the client's cached PostgreSQL medication rows
+ */
+function generateLocalDatabaseFallback(
+  userQuery: string,
+  user: any,
+  meds: any[],
+): { text: string; quickReplies?: string[] } {
+  const q = userQuery.toLowerCase().trim();
+  const patientName = user?.name || 'Friend';
+
+  if (
+    q.includes('my med') ||
+    q.includes('what med') ||
+    q.includes('list') ||
+    q.includes('schedule') ||
+    q.includes('routine') ||
+    q.includes('today')
+  ) {
+    if (meds.length === 0) {
+      return {
+        text: `Hello **${patientName}**! You do not have any active medications in your schedule right now.\n\nAdd one in the **Meds** tab to start tracking doses and alarms.`,
+        quickReplies: ['How to add a medication', 'Alarm settings'],
+      };
+    }
+
+    const listStr = meds
+      .map((m) => {
+        let timeText = m.time || m.timeSlot || 'Scheduled';
+        if (m.times) {
+          try {
+            const parsed = JSON.parse(m.times);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              timeText = parsed.map((p: any) => `${p.slot} (${p.time})`).join(', ');
+            }
+          } catch {
+            // fallback
+          }
+        }
+        return `• **${m.name}** (${m.dosage})\n  ⏰ **Time:** ${timeText}\n  📦 **Pills Left:** ${m.pillsLeft} of ${m.totalPills}\n  📋 **Instructions:** ${m.instructions || 'Take as prescribed'}`;
+      })
+      .join('\n\n');
+
+    return {
+      text: `📋 **Your Live Medication Schedule (${patientName}):**\n\n${listStr}`,
+      quickReplies: ['Check remaining pills', 'Missed dose advice'],
+    };
+  }
+
+  if (q.includes('pill') || q.includes('left') || q.includes('stock') || q.includes('refill')) {
+    if (meds.length === 0) {
+      return {
+        text: `You have no medications recorded in your inventory yet, **${patientName}**.`,
+      };
+    }
+
+    const stockSummary = meds
+      .map((m) => `• **${m.name}**: **${m.pillsLeft}** pills left (out of ${m.totalPills})`)
+      .join('\n');
+
+    return {
+      text: `📦 **Inventory Status for ${patientName}:**\n\n${stockSummary}`,
+      quickReplies: ['My schedule', 'Missed dose advice'],
+    };
+  }
+
+  // Matching medication by name in user's database
+  const matching = meds.find((m) => q.includes(m.name.toLowerCase()));
+  if (matching) {
+    return {
+      text: `💊 **${matching.name} (${matching.dosage}):**\n\n• **Prescription Dosage:** ${matching.dosage}\n• **Instructions:** ${matching.instructions || 'Take with water'}\n• **Pills Remaining:** ${matching.pillsLeft} of ${matching.totalPills}`,
+      quickReplies: ['My schedule', 'Food advice'],
+    };
+  }
+
+  return {
+    text: `🤖 **MediRem Health Assistant:**\n\nI received your question about **"${userQuery}"**.\n\nYou currently have **${meds.length}** medication(s) in your regimen. How can I help you regarding your schedules, doses, or alarms?`,
+    quickReplies: ['My schedule', 'Pills left', 'Missed dose rule'],
+  };
 }
 
 function LinearBotIcon() {
@@ -393,7 +498,6 @@ function LinearBotIcon() {
 }
 
 function FormattedText({ text, isAi }: { text: string; isAi: boolean }) {
-  // Simple clean markdown-like bold and bullet point renderer
   const lines = text.split('\n');
 
   return (
@@ -403,7 +507,6 @@ function FormattedText({ text, isAi }: { text: string; isAi: boolean }) {
           return <View key={idx} style={{ height: 6 }} />;
         }
 
-        // Bold parser
         const parts = line.split(/(\*\*.*?\*\*)/g);
 
         return (
@@ -453,26 +556,24 @@ const styles = StyleSheet.create({
   },
   botAvatar: {
     position: 'relative',
-    width: 44,
-    height: 44,
   },
   botIconWrapper: {
     width: 44,
     height: 44,
-    borderRadius: 14,
+    borderRadius: 22,
     backgroundColor: '#208AEF',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#208AEF',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
     elevation: 3,
   },
   onlineDot: {
     position: 'absolute',
-    bottom: -1,
-    right: -1,
+    bottom: 0,
+    right: 0,
     width: 12,
     height: 12,
     borderRadius: 6,
@@ -500,11 +601,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   aiBadgeText: {
+    color: '#FFFFFF',
     fontSize: 9,
     fontWeight: '800',
-    color: '#FFFFFF',
     textTransform: 'uppercase',
-    letterSpacing: 0.4,
   },
   headerSubtitle: {
     fontSize: 12,
@@ -530,69 +630,68 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   chipButton: {
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
   },
   chipText: {
     fontSize: 12,
-    fontWeight: '600',
     color: '#208AEF',
+    fontWeight: '600',
   },
   messagesScroll: {
     flex: 1,
   },
   messagesContent: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 20,
+    padding: 16,
+    paddingBottom: 24,
+    gap: 16,
   },
   messageRow: {
     flexDirection: 'row',
-    marginBottom: 16,
-    alignItems: 'flex-start',
+    gap: 10,
+    maxWidth: '88%',
   },
   messageRowAi: {
-    justifyContent: 'flex-start',
+    alignSelf: 'flex-start',
   },
   messageRowUser: {
+    alignSelf: 'flex-end',
     justifyContent: 'flex-end',
   },
   msgAvatarBox: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#E6F4FE',
+    backgroundColor: '#EFF6FF',
     borderWidth: 1,
-    borderColor: '#BAE6FD',
+    borderColor: '#BFDBFE',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 8,
     marginTop: 4,
   },
   bubble: {
-    maxWidth: '82%',
-    borderRadius: 20,
-    paddingHorizontal: 15,
+    paddingHorizontal: 14,
     paddingVertical: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 1,
+    borderRadius: 18,
   },
   bubbleAi: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderTopLeftRadius: 6,
+    borderTopLeftRadius: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
   },
   bubbleUser: {
     backgroundColor: '#208AEF',
-    borderTopRightRadius: 6,
+    borderTopRightRadius: 4,
   },
   messageText: {
     fontSize: 14,
@@ -609,47 +708,59 @@ const styles = StyleSheet.create({
   },
   bulletLine: {
     paddingLeft: 4,
-    marginVertical: 1,
+    marginTop: 2,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 6,
   },
   timestamp: {
     fontSize: 10,
-    marginTop: 6,
-    alignSelf: 'flex-end',
   },
   timestampAi: {
     color: '#94A3B8',
   },
   timestampUser: {
-    color: 'rgba(255, 255, 255, 0.75)',
+    color: '#BFDBFE',
+    alignSelf: 'flex-end',
+  },
+  aiSourceText: {
+    fontSize: 9,
+    color: '#059669',
+    fontWeight: '700',
   },
   quickRepliesBox: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
     marginTop: 10,
-    paddingTop: 8,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
-    gap: 6,
   },
   quickReplyPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    gap: 4,
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 4,
     borderRadius: 12,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
   },
   quickReplyText: {
     fontSize: 11,
-    fontWeight: '600',
     color: '#208AEF',
+    fontWeight: '600',
   },
   typingBubble: {
-    paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    paddingVertical: 10,
   },
   typingText: {
     fontSize: 12,
@@ -658,8 +769,7 @@ const styles = StyleSheet.create({
   },
   dotsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+    gap: 3,
   },
   dot: {
     width: 5,
@@ -674,22 +784,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 12,
     padding: 10,
-    marginTop: 10,
-    marginBottom: 8,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 10,
+    marginTop: 8,
   },
   medicalDisclaimerText: {
     flex: 1,
-    fontSize: 11,
+    fontSize: 10,
     color: '#64748B',
-    lineHeight: 15,
+    lineHeight: 14,
   },
   inputArea: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 10,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
@@ -698,13 +807,12 @@ const styles = StyleSheet.create({
   },
   textInput: {
     flex: 1,
+    height: 42,
     backgroundColor: '#F1F5F9',
-    borderRadius: 22,
+    borderRadius: 21,
     paddingHorizontal: 16,
-    paddingVertical: 10,
     fontSize: 14,
     color: '#0F172A',
-    maxHeight: 100,
   },
   sendButton: {
     width: 42,
@@ -713,15 +821,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#208AEF',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#208AEF',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 2,
   },
   sendButtonDisabled: {
     backgroundColor: '#CBD5E1',
-    shadowOpacity: 0,
-    elevation: 0,
   },
 });

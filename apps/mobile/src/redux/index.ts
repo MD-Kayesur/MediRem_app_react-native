@@ -27,5 +27,6 @@ export * from './api/apiSlice';
 export * from './api/authApi';
 export * from './api/userApi';
 export * from './api/medicationsApi';
+export * from './api/chatApi';
 export * from './slices/authSlice';
 export * from './slices/alarmSettingsSlice';
