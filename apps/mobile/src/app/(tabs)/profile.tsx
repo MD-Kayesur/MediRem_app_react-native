@@ -855,11 +855,13 @@ export default function ProfileScreen() {
 
         {/* Section: Medication Alarms & Ringtones (Full CRUD Management) */}
         <View style={styles.sectionHeaderRow}>
-          <View style={{ flex: 1 }}>
+          <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
             <Text style={[styles.sectionHeaderTitle, { color: timeTheme.colors.textPrimary }]}>
               Alarms & Ringtones
             </Text>
-            <Text style={[styles.sectionHeaderSub, { color: timeTheme.colors.textSecondary }]}>
+            <Text
+              style={[styles.sectionHeaderSub, { color: timeTheme.colors.textSecondary }]}
+              numberOfLines={2}>
               Choose active alarm sound & manage custom tones
             </Text>
           </View>
@@ -890,29 +892,41 @@ export default function ProfileScreen() {
                 color={currentRingtone.color || '#208AEF'}
               />
             </View>
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                <Text
-                  style={[
-                    styles.activeToneTitle,
-                    { color: timeTheme.colors.textPrimary },
-                  ]}
-                  numberOfLines={1}>
-                  {currentRingtone.name}
-                </Text>
-                <View style={styles.activeArmedBadge}>
-                  <Ionicons name="checkmark-circle" size={12} color="#15803D" />
-                  <Text style={styles.activeArmedText}>Active Tone</Text>
-                </View>
-              </View>
+            <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
               <Text
                 style={[
-                  styles.activeToneSub,
-                  { color: timeTheme.colors.textSecondary },
+                  styles.activeToneTitle,
+                  { color: timeTheme.colors.textPrimary },
                 ]}
-                numberOfLines={1}>
-                {currentRingtone.description}
+                numberOfLines={1}
+                ellipsizeMode="tail">
+                {currentRingtone.name}
               </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 }}>
+                <View
+                  style={[
+                    styles.activeArmedBadge,
+                    { backgroundColor: timeTheme.isDark ? '#064E3B60' : '#DCFCE7' },
+                  ]}>
+                  <Ionicons name="checkmark-circle" size={11} color={timeTheme.isDark ? '#34D399' : '#15803D'} />
+                  <Text
+                    style={[
+                      styles.activeArmedText,
+                      { color: timeTheme.isDark ? '#34D399' : '#15803D' },
+                    ]}>
+                    Active Tone
+                  </Text>
+                </View>
+                <Text
+                  style={[
+                    styles.activeToneSub,
+                    { color: timeTheme.colors.textSecondary, flex: 1 },
+                  ]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail">
+                  • {currentRingtone.description}
+                </Text>
+              </View>
             </View>
           </View>
 
@@ -929,7 +943,7 @@ export default function ProfileScreen() {
             activeOpacity={0.8}>
             <Ionicons
               name={playingRingtoneId === currentRingtone.id ? 'stop' : 'volume-high'}
-              size={16}
+              size={15}
               color={playingRingtoneId === currentRingtone.id ? '#EF4444' : '#208AEF'}
             />
             <Text
@@ -2836,6 +2850,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 3,
+    flexShrink: 0,
   },
   addRingtoneHeaderBtnText: {
     fontSize: 12,
@@ -2846,7 +2861,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginBottom: 12,
     borderRadius: 16,
-    padding: 14,
+    padding: 12,
     borderWidth: 1.5,
     borderColor: '#BAE6FD',
     flexDirection: 'row',
@@ -2856,15 +2871,17 @@ const styles = StyleSheet.create({
   activeToneLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
     flex: 1,
+    minWidth: 0,
   },
   activeToneIconBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   activeToneTitle: {
     fontSize: 14,
@@ -2878,6 +2895,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 1.5,
     borderRadius: 6,
+    flexShrink: 0,
   },
   activeArmedText: {
     fontSize: 10,
@@ -2891,12 +2909,13 @@ const styles = StyleSheet.create({
   previewActiveBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#BAE6FD',
+    flexShrink: 0,
   },
   previewActiveBtnPlaying: {
     backgroundColor: '#FEF2F2',
