@@ -1045,115 +1045,115 @@ export default function MedsScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: timeTheme.colors.background }]}>
       {/* Top Header */}
       <View style={[styles.header, { backgroundColor: timeTheme.colors.headerBg }]}>
-        <View className="flex-row justify-between items-center mb-3" style={styles.headerRow}>
-          <View className="flex-row items-center gap-3">
-            <Image
-              source={require('@/../assets/images/icon-symbol.png')}
-              style={{ width: 40, height: 40, borderRadius: 10 }}
-              resizeMode="contain"
-            />
-            <View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={[styles.title, { color: timeTheme.colors.textPrimary }]}>
+        <View style={styles.headerRow}>
+          {/* Left Title & Branding */}
+          <View style={styles.headerTitleCol}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <Image
+                source={require('@/../assets/images/icon-symbol.png')}
+                style={{ width: 36, height: 36, borderRadius: 10 }}
+                resizeMode="contain"
+              />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text
+                  style={[styles.title, { color: timeTheme.colors.textPrimary }]}
+                  numberOfLines={1}>
                   My Medications
                 </Text>
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 4,
-                    paddingHorizontal: 7,
-                    paddingVertical: 2,
-                    borderRadius: 10,
-                    backgroundColor: isOnlineState
-                      ? (timeTheme.isDark ? '#064E3B40' : '#ECFDF5')
-                      : (timeTheme.isDark ? '#78350F40' : '#FEF3C7'),
-                    borderWidth: 1,
-                    borderColor: isOnlineState
-                      ? (timeTheme.isDark ? '#05966960' : '#A7F3D0')
-                      : (timeTheme.isDark ? '#D9770660' : '#FDE68A'),
-                  }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                  <Text
+                    style={[styles.subtitle, { color: timeTheme.colors.textSecondary }]}
+                    numberOfLines={1}>
+                    {meds.filter((m) => m.status === 'active').length} active routines
+                  </Text>
                   <View
                     style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: 3,
-                      backgroundColor: isOnlineState ? '#10B981' : '#D97706',
-                    }}
-                  />
-                  <Text
-                    style={{
-                      fontSize: 10,
-                      fontWeight: '700',
-                      color: isOnlineState ? '#059669' : '#B45309',
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 3,
+                      paddingHorizontal: 6,
+                      paddingVertical: 1.5,
+                      borderRadius: 8,
+                      backgroundColor: isOnlineState
+                        ? (timeTheme.isDark ? '#064E3B40' : '#ECFDF5')
+                        : (timeTheme.isDark ? '#78350F40' : '#FEF3C7'),
+                      borderWidth: 1,
+                      borderColor: isOnlineState
+                        ? (timeTheme.isDark ? '#05966960' : '#A7F3D0')
+                        : (timeTheme.isDark ? '#D9770660' : '#FDE68A'),
                     }}>
-                    {isOnlineState ? 'Cloud Synced' : 'Offline'}
-                  </Text>
+                    <View
+                      style={{
+                        width: 5,
+                        height: 5,
+                        borderRadius: 2.5,
+                        backgroundColor: isOnlineState ? '#10B981' : '#D97706',
+                      }}
+                    />
+                    <Text
+                      style={{
+                        fontSize: 9,
+                        fontWeight: '700',
+                        color: isOnlineState ? '#059669' : '#B45309',
+                      }}>
+                      {isOnlineState ? 'Cloud' : 'Offline'}
+                    </Text>
+                  </View>
                 </View>
               </View>
-              <Text style={[styles.subtitle, { color: timeTheme.colors.textSecondary }]}>
-                {meds.filter((m) => m.status === 'active').length} active routines
-              </Text>
             </View>
           </View>
 
-          <View className="flex-row items-center gap-2">
+          {/* Right Action Buttons */}
+          <View style={styles.headerActionsRow}>
             <ThemeHeaderButton size={36} />
 
-            {isAlarmPlaying && (
-              <TouchableOpacity
-                onPress={handleOpenAlarmModal}
-                style={{
-                  backgroundColor: '#FEE2E2',
-                  borderWidth: 1,
-                  borderColor: '#EF4444',
-                  paddingHorizontal: 10,
-                  paddingVertical: 6,
-                  borderRadius: 20,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 4,
-                }}
-                activeOpacity={0.8}>
-                <Ionicons name="volume-high" size={14} color="#DC2626" />
-                <Text style={{ fontSize: 11, fontWeight: '800', color: '#DC2626' }}>
-                  Ringing ({ringSecondsLeft}s)
-                </Text>
-              </TouchableOpacity>
-            )}
-
-            {isSnoozed3m && !isAlarmPlaying && (
-              <TouchableOpacity
-                onPress={handleOpenAlarmModal}
-                style={{
-                  backgroundColor: '#FEF3C7',
-                  borderWidth: 1,
-                  borderColor: '#F59E0B',
-                  paddingHorizontal: 10,
-                  paddingVertical: 6,
-                  borderRadius: 20,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 4,
-                }}
-                activeOpacity={0.8}>
-                <Ionicons name="time" size={14} color="#B45309" />
-                <Text style={{ fontSize: 11, fontWeight: '800', color: '#B45309' }}>
-                  Repeats in {Math.floor(snoozeSecondsLeft / 60)}:{(snoozeSecondsLeft % 60).toString().padStart(2, '0')}
-                </Text>
-              </TouchableOpacity>
-            )}
-
             <TouchableOpacity
-              className="flex-row items-center gap-1.5 bg-primary px-4 py-2 rounded-full shadow-sm active:opacity-90"
               style={styles.addBtn}
               onPress={handleOpenAddModal}
-              activeOpacity={0.85}>
-              <Ionicons name="add" size={18} color="#FFFFFF" />
-              <Text className="text-white text-xs font-bold" style={styles.addBtnText}>Add Med</Text>
+              activeOpacity={0.85}
+              accessibilityLabel="Add medication routine">
+              <Ionicons name="add" size={17} color="#FFFFFF" />
+              <Text style={styles.addBtnText}>Add Med</Text>
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* Ringing / Snooze Status Alert (When Active) */}
+        {(isAlarmPlaying || isSnoozed3m) && (
+          <TouchableOpacity
+            onPress={handleOpenAlarmModal}
+            style={{
+              backgroundColor: isAlarmPlaying ? '#FEE2E2' : '#FEF3C7',
+              borderWidth: 1,
+              borderColor: isAlarmPlaying ? '#EF4444' : '#F59E0B',
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderRadius: 12,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              marginBottom: 10,
+            }}
+            activeOpacity={0.8}>
+            <Ionicons
+              name={isAlarmPlaying ? 'volume-high' : 'time'}
+              size={16}
+              color={isAlarmPlaying ? '#DC2626' : '#B45309'}
+            />
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: '800',
+                color: isAlarmPlaying ? '#DC2626' : '#B45309',
+              }}>
+              {isAlarmPlaying
+                ? `🚨 Alarm Ringing! (${ringSecondsLeft}s) • Tap to Take or Snooze`
+                : `⏰ Snoozed • Repeats in ${Math.floor(snoozeSecondsLeft / 60)}:${(snoozeSecondsLeft % 60).toString().padStart(2, '0')}`}
+            </Text>
+          </TouchableOpacity>
+        )}
 
         {/* Search Bar */}
         <View
@@ -2377,34 +2377,43 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
+  },
+  headerTitleCol: {
+    flex: 1,
+    marginRight: 10,
+  },
+  headerActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   title: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '800',
-    color: '#0F172A',
+    letterSpacing: -0.3,
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#94A3B8',
   },
   addBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#208AEF',
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 22,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
     elevation: 2,
     shadowColor: '#208AEF',
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
   },
   addBtnText: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
-    marginLeft: 4,
+    marginLeft: 3,
   },
   searchBar: {
     flexDirection: 'row',
