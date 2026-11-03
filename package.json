@@ -9,11 +9,11 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "node api.js && turbo run dev",
-    "build": "node api.js && turbo run build",
+    "dev": "turbo run dev",
+    "build": "turbo run build",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
-    "start": "node api.js && npm run mobile",
+    "start": "npm run mobile",
     "mobile": "npm --workspace=@medirem/mobile run start",
     "mobile:android": "npm --workspace=@medirem/mobile run android",
     "mobile:ios": "npm --workspace=@medirem/mobile run ios",
