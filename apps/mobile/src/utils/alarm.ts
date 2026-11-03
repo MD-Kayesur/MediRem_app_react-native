@@ -1,5 +1,21 @@
 import { Platform, Vibration } from 'react-native';
-import * as Speech from 'expo-speech';
+
+// Safe lazy-loaded reference to expo-speech to avoid startup crash if native module is unlinked
+let speechModule: typeof import('expo-speech') | null = null;
+let hasAttemptedSpeechLoad = false;
+
+function getSpeech(): typeof import('expo-speech') | null {
+  if (!hasAttemptedSpeechLoad) {
+    hasAttemptedSpeechLoad = true;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      speechModule = require('expo-speech');
+    } catch {
+      speechModule = null;
+    }
+  }
+  return speechModule;
+}
 
 export const ALARM_RING_DURATION_SEC = 60; // 1 full minute of continuous ringing
 export const ALARM_RING_DURATION_MS = 60 * 1000;
@@ -235,22 +251,25 @@ export function startVoiceAlert(medicationName: string) {
       }
     } else {
       try {
-        Speech.stop();
-        Speech.speak(phrase, {
-          language: 'en',
-          pitch: 1.0,
-          rate: 0.95,
-          onDone: () => {
-            if (isRinging && isVoiceAlertGloballyEnabled) {
-              voiceLoopTimeout = setTimeout(speakIteration, 1200);
-            }
-          },
-          onError: () => {
-            if (isRinging && isVoiceAlertGloballyEnabled) {
-              voiceLoopTimeout = setTimeout(speakIteration, 2500);
-            }
-          },
-        });
+        const Speech = getSpeech();
+        if (Speech) {
+          Speech.stop();
+          Speech.speak(phrase, {
+            language: 'en',
+            pitch: 1.0,
+            rate: 0.95,
+            onDone: () => {
+              if (isRinging && isVoiceAlertGloballyEnabled) {
+                voiceLoopTimeout = setTimeout(speakIteration, 1200);
+              }
+            },
+            onError: () => {
+              if (isRinging && isVoiceAlertGloballyEnabled) {
+                voiceLoopTimeout = setTimeout(speakIteration, 2500);
+              }
+            },
+          });
+        }
       } catch (err) {
         console.warn('[AlarmUtil] Speech error:', err);
       }
@@ -275,7 +294,8 @@ export function stopVoiceAlert(): void {
     }
   } else {
     try {
-      Speech.stop();
+      const Speech = getSpeech();
+      Speech?.stop();
     } catch {
       // safe fallback
     }
@@ -294,7 +314,8 @@ export function previewVoiceAlert(medicationName = 'Aspirin'): void {
     }
   } else {
     try {
-      Speech.speak(phrase, {
+      const Speech = getSpeech();
+      Speech?.speak(phrase, {
         language: 'en',
         pitch: 1.0,
         rate: 0.95,
