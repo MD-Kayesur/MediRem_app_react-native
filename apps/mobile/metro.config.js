@@ -14,5 +14,21 @@ config.resolver.nodeModulesPaths = [
   path.resolve(monorepoRoot, "node_modules"),
 ];
 
-module.exports = withNativeWind(config, { input: "./src/global.css" });
+const semverPath = (() => {
+  try {
+    return path.dirname(
+      require.resolve("semver/package.json", {
+        paths: [projectRoot, monorepoRoot],
+      })
+    );
+  } catch (e) {
+    return path.resolve(monorepoRoot, "node_modules/semver");
+  }
+})();
 
+config.resolver.extraNodeModules = {
+  ...config.resolver.extraNodeModules,
+  semver: semverPath,
+};
+
+module.exports = withNativeWind(config, { input: "./src/global.css" });
