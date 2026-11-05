@@ -101,6 +101,43 @@ export interface SignUpInput {
 export interface AuthResponse {
   user: AuthUser;
   token?: string;
+  accessToken?: string;
+  refreshToken?: string;
+  expiresIn?: string | number;
+  refreshExpiresIn?: string | number;
+}
+
+export interface RefreshTokenInput {
+  refreshToken: string;
+}
+
+export interface SupportMessage {
+  id: string;
+  userId: string;
+  senderId: string;
+  senderRole: 'USER' | 'ADMIN';
+  senderName: string;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SupportThread {
+  userId: string;
+  user: {
+    id: string;
+    name: string;
+    email?: string | null;
+  };
+  lastMessage: SupportMessage;
+  unreadCount: number;
+  totalMessages: number;
+}
+
+export interface SendSupportMessageInput {
+  userId?: string;
+  message: string;
 }
 
 export interface VerifySignupInput {

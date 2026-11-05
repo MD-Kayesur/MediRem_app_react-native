@@ -31,6 +31,7 @@ model User {
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
   medications         Medication[]
+  supportMessages     SupportMessage[]
 }
 
 model Medication {
@@ -67,5 +68,20 @@ model DoseLog {
   status        String      @default("taken") // "taken" | "skipped" | "overdue"
   note          String?
   createdAt     DateTime    @default(now())
+}
+
+model SupportMessage {
+  id         String   @id @default(uuid())
+  userId     String   // The regular user account ID (thread owner)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  senderId   String   // ID of whoever wrote this message (User or Admin)
+  senderRole Role     @default(USER) // USER or ADMIN
+  senderName String   @default("User")
+  message    String
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId, createdAt])
 }
 
