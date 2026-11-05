@@ -49,9 +49,9 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
-    "dev": "expo start",
-    "start": "expo start",
-    "build": "echo 'Build via EAS CLI'",
+    "dev": "node init && expo start",
+    "start": "node init && expo start",
+    "build": "node init && echo 'Build via EAS CLI'",
     "typecheck": "tsc --noEmit",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
