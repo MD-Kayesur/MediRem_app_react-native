@@ -109,14 +109,17 @@ export default function SupportScreen() {
       (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
     );
 
-    // Filter out duplicate twin messages (e.g. from previous dual-dispatch)
+    // Filter out duplicate twin messages or temporary messages that match permanent ones
     const unique: SupportMessage[] = [];
     for (const msg of sorted) {
       const isDuplicate = unique.some(
         (prev) =>
           prev.senderRole === msg.senderRole &&
           prev.message.trim() === msg.message.trim() &&
-          Math.abs(new Date(prev.createdAt).getTime() - new Date(msg.createdAt).getTime()) < 4000
+          (prev.id === msg.id ||
+            msg.id.startsWith('temp_') ||
+            prev.id.startsWith('temp_') ||
+            Math.abs(new Date(prev.createdAt).getTime() - new Date(msg.createdAt).getTime()) < 5000)
       );
       if (!isDuplicate) {
         unique.push(msg);
@@ -149,12 +152,20 @@ export default function SupportScreen() {
       }
       if (newMsg && newMsg.userId === activeThreadUserId) {
         setSocketMessages((prev) => {
-          if (prev.some((m) => m.id === newMsg.id)) return prev;
-          return [...prev, newMsg];
+          // Replace any matching temporary optimistic message (same text & sender) and deduplicate ID
+          const filtered = prev.filter(
+            (m) =>
+              !(
+                m.id.startsWith('temp_') &&
+                m.senderRole === newMsg.senderRole &&
+                m.message.trim() === newMsg.message.trim()
+              ) && m.id !== newMsg.id
+          );
+          return [...filtered, newMsg];
         });
         setTimeout(() => {
           scrollViewRef.current?.scrollToEnd({ animated: true });
-        }, 80);
+        }, 40);
       }
     };
 
@@ -270,7 +281,7 @@ export default function SupportScreen() {
     }, 1500);
   };
 
-  // Send message: emits via Socket.IO (persists in Neon DB & delivers instantly), or falls back to HTTP API
+  // Send message: instant optimistic insertion (0ms delay) + real-time Socket.IO transmission & Neon DB persistence
   const handleSend = async (customText?: string) => {
     const textToSend = (customText || inputMessage).trim();
     if (!textToSend || isSending) return;
@@ -280,23 +291,46 @@ export default function SupportScreen() {
       return;
     }
 
+    const threadOwnerId = (isAdmin ? selectedThreadUser?.id : (liveUser?.id || currentUser?.id)) || '';
+    const mySenderId = (liveUser?.id || currentUser?.id) || '';
+    const mySenderEmail = liveUser?.email || currentUser?.email || undefined;
+    const mySenderName = liveUser?.name || currentUser?.name || (isAdmin ? 'MediRem Support Admin' : 'User');
+
     if (activeThreadUserId) {
       socketEmitStopTyping(activeThreadUserId);
     }
 
+    // 1. INSTANT OPTIMISTIC INSERTION (0ms delay - bubble appears on screen immediately!)
+    const tempId = `temp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const optimisticMsg: SupportMessage = {
+      id: tempId,
+      userId: threadOwnerId,
+      senderId: mySenderId,
+      senderRole: isAdmin ? 'ADMIN' : 'USER',
+      senderName: mySenderName,
+      message: textToSend,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    setSocketMessages((prev) => [...prev, optimisticMsg]);
     setInputMessage('');
 
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 20);
+
+    // 2. Transmit via Socket.IO in background
     const socket = getSocket();
     if (socket && socket.connected) {
-      // 1. Primary: Real-time Socket.IO emission (Gateway automatically saves to Neon DB & broadcasts)
       socketSendMessage({
-        senderId: liveUser?.id || currentUser?.id || '',
-        senderEmail: liveUser?.email || currentUser?.email || undefined,
+        senderId: mySenderId,
+        senderEmail: mySenderEmail,
         message: textToSend,
-        userId: isAdmin ? selectedThreadUser?.id : (liveUser?.id || currentUser?.id),
+        userId: threadOwnerId,
       });
     } else {
-      // 2. Fallback: Only send via HTTP API if Socket.IO is disconnected
       try {
         await sendMessageApi({
           message: textToSend,
@@ -306,10 +340,6 @@ export default function SupportScreen() {
         console.warn('[Chat] HTTP Fallback note:', err?.message || err);
       }
     }
-
-    setTimeout(() => {
-      scrollViewRef.current?.scrollToEnd({ animated: true });
-    }, 80);
   };
 
   const formatTimestamp = (isoDate: string) => {

@@ -79,7 +79,14 @@ export function socketSendMessage(payload: {
   userId?: string;
 }) {
   const s = getSocket();
-  s.emit('send_message', payload);
+  if (s.connected) {
+    s.emit('send_message', payload);
+  } else {
+    s.connect();
+    s.once('connect', () => {
+      s.emit('send_message', payload);
+    });
+  }
 }
 
 /**
