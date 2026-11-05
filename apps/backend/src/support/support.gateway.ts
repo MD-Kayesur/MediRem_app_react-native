@@ -113,18 +113,14 @@ export class SupportGateway
       const savedMsg = result.data;
       const roomName = `thread_${savedMsg.userId}`;
 
-      // 1. Broadcast to everyone currently viewing this thread room
+      // 1. Broadcast strictly once to everyone viewing this thread room
       this.server.to(roomName).emit('new_message', savedMsg);
 
-      // 2. Also emit to sender socket directly in case they aren't in room
-      client.emit('message_sent', savedMsg);
-
-      // 3. Notify all connected Admins in the admin desk
+      // 2. Notify all connected Admins in the admin desk to refresh their conversation list
       this.server.to('admin_desk').emit('thread_updated', {
         userId: savedMsg.userId,
         lastMessage: savedMsg,
       });
-      this.server.to('admin_desk').emit('new_message', savedMsg);
 
       this.logger.log(
         `⚡ [Socket.IO] Broadcasted new message to room ${roomName} from ${savedMsg.senderRole} ${savedMsg.senderName}`,

@@ -103,9 +103,26 @@ export default function SupportScreen() {
     (threadResponse?.data || []).forEach((m) => map.set(m.id, m));
     // Live socket messages
     socketMessages.forEach((m) => map.set(m.id, m));
-    return Array.from(map.values()).sort(
+
+    const sorted = Array.from(map.values()).sort(
       (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
     );
+
+    // Filter out duplicate twin messages (e.g. from previous dual-dispatch)
+    const unique: SupportMessage[] = [];
+    for (const msg of sorted) {
+      const isDuplicate = unique.some(
+        (prev) =>
+          prev.senderRole === msg.senderRole &&
+          prev.message.trim() === msg.message.trim() &&
+          Math.abs(new Date(prev.createdAt).getTime() - new Date(msg.createdAt).getTime()) < 4000
+      );
+      if (!isDuplicate) {
+        unique.push(msg);
+      }
+    }
+
+    return unique;
   }, [threadResponse?.data, socketMessages]);
 
   const adminThreads: SupportThread[] = adminThreadsResponse?.data || [];
@@ -157,7 +174,6 @@ export default function SupportScreen() {
     };
 
     socket.on('new_message', handleNewMessage);
-    socket.on('message_sent', handleNewMessage);
     socket.on('thread_updated', handleThreadUpdated);
     socket.on('user_typing', handleUserTyping);
     socket.on('user_stop_typing', handleUserStopTyping);
@@ -166,7 +182,6 @@ export default function SupportScreen() {
       socket.off('connect', updateConnState);
       socket.off('disconnect', updateConnState);
       socket.off('new_message', handleNewMessage);
-      socket.off('message_sent', handleNewMessage);
       socket.off('thread_updated', handleThreadUpdated);
       socket.off('user_typing', handleUserTyping);
       socket.off('user_stop_typing', handleUserStopTyping);
@@ -231,7 +246,7 @@ export default function SupportScreen() {
     }, 1500);
   };
 
-  // Send message: emits via Socket.IO for sub-millisecond delivery & persists in Neon DB
+  // Send message: emits via Socket.IO (persists in Neon DB & delivers instantly), or falls back to HTTP API
   const handleSend = async (customText?: string) => {
     const textToSend = (customText || inputMessage).trim();
     if (!textToSend || isSending) return;
@@ -247,27 +262,30 @@ export default function SupportScreen() {
 
     setInputMessage('');
 
-    // 1. Real-time Socket.IO emission
-    socketSendMessage({
-      senderId: liveUser?.id || currentUser?.id || '',
-      senderEmail: liveUser?.email || currentUser?.email || undefined,
-      message: textToSend,
-      userId: isAdmin ? selectedThreadUser?.id : (liveUser?.id || currentUser?.id),
-    });
-
-    // 2. Persistent Neon Cloud database storage
-    try {
-      await sendMessageApi({
+    const socket = getSocket();
+    if (socket && socket.connected) {
+      // 1. Primary: Real-time Socket.IO emission (Gateway automatically saves to Neon DB & broadcasts)
+      socketSendMessage({
+        senderId: liveUser?.id || currentUser?.id || '',
+        senderEmail: liveUser?.email || currentUser?.email || undefined,
         message: textToSend,
-        userId: isAdmin ? selectedThreadUser?.id : undefined,
-      }).unwrap();
-
-      setTimeout(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-    } catch (err: any) {
-      console.warn('[Chat] Message persistence note:', err?.message || err);
+        userId: isAdmin ? selectedThreadUser?.id : (liveUser?.id || currentUser?.id),
+      });
+    } else {
+      // 2. Fallback: Only send via HTTP API if Socket.IO is disconnected
+      try {
+        await sendMessageApi({
+          message: textToSend,
+          userId: isAdmin ? selectedThreadUser?.id : undefined,
+        }).unwrap();
+      } catch (err: any) {
+        console.warn('[Chat] HTTP Fallback note:', err?.message || err);
+      }
     }
+
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 80);
   };
 
   const formatTimestamp = (isoDate: string) => {
