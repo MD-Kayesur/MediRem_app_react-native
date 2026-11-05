@@ -14,6 +14,10 @@ export interface AuthResponse {
   success: boolean;
   user?: AuthUser;
   token?: string;
+  accessToken?: string;
+  refreshToken?: string;
+  expiresIn?: string | number;
+  refreshExpiresIn?: string | number;
   message?: string;
   error?: string;
 }
@@ -39,6 +43,7 @@ export interface VerifySignupResponse {
 export interface GenericMessageResponse {
   success: boolean;
   message: string;
+  code?: string;
   error?: string;
 }
 
@@ -73,6 +78,15 @@ export const authApi = apiSlice.injectEndpoints({
     signIn: builder.mutation<AuthResponse, SignInInput>({
       query: (body) => ({
         url: '/auth/login',
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['User'],
+    }),
+
+    refreshToken: builder.mutation<AuthResponse, { refreshToken: string }>({
+      query: (body) => ({
+        url: '/auth/refresh',
         method: 'POST',
         body,
       }),
@@ -115,6 +129,7 @@ export const {
   useVerifySignupMutation,
   useResendSignupCodeMutation,
   useSignInMutation,
+  useRefreshTokenMutation,
   useForgotPasswordMutation,
   useVerifyResetCodeMutation,
   useResetPasswordMutation,

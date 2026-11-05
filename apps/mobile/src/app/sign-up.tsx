@@ -24,6 +24,7 @@ import {
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import { setPendingEmail, setCredentials } from '@/redux/slices/authSlice';
 import { saveUserSession } from '@/utils/authStorage';
+import { warmupBackend } from '@/utils/backendWarmup';
 import { AuthUser } from '@medirem/types';
 
 export default function SignUpScreen() {
@@ -39,6 +40,9 @@ export default function SignUpScreen() {
 
   // If already authenticated, redirect to Home
   useEffect(() => {
+    // Warm up backend and database in background
+    warmupBackend().catch(() => {});
+
     if (isAuthenticated && authStateUser?.id) {
       router.replace('/(tabs)/today');
     }
@@ -55,6 +59,7 @@ export default function SignUpScreen() {
 
   // Verification Code State
   const [verifyCode, setVerifyCode] = useState('');
+  const [testOtp, setTestOtp] = useState<string | null>(null);
   const [resendCountdown, setResendCountdown] = useState(0);
 
   // Success Modal State (shown after email code verification)
@@ -133,7 +138,7 @@ export default function SignUpScreen() {
 
     try {
       const cleanEmail = email.trim().toLowerCase();
-      await signUpApi({
+      const res: any = await signUpApi({
         name: name.trim(),
         email: cleanEmail,
         password,
@@ -142,7 +147,10 @@ export default function SignUpScreen() {
 
       // ALWAYS transition to 6-digit code verification step!
       dispatch(setPendingEmail(cleanEmail));
-      setVerifyCode(''); // Clean field ready for user entry
+      if (res?.code) {
+        setTestOtp(res.code);
+      }
+      setVerifyCode(''); // Code fields remain completely empty for user to type
       setResendCountdown(60); // 60s cooldown
       setStep('verify');
     } catch (err: any) {
@@ -191,9 +199,13 @@ export default function SignUpScreen() {
 
     try {
       const cleanEmail = email.trim().toLowerCase();
-      const result = await resendCodeApi({ email: cleanEmail }).unwrap();
+      const result: any = await resendCodeApi({ email: cleanEmail }).unwrap();
       setResendCountdown(60);
-      Alert.alert('Code Sent! ✉️', result.message || `A fresh 6-digit verification code was sent to ${cleanEmail}. Check your Gmail inbox.`);
+      if (result?.code) {
+        setTestOtp(result.code);
+      }
+      setVerifyCode('');
+      Alert.alert('Code Sent! ✉️', result.message || `A fresh 6-digit verification code was sent to ${cleanEmail}. Check your inbox.`);
     } catch (err: any) {
       const msg = err?.data?.message || err?.error || 'Failed to resend code.';
       setErrorMessage(msg);
@@ -505,15 +517,15 @@ export default function SignUpScreen() {
                 </Text>
               </View>
 
-              {/* Developer / Live Help Chip */}
-              {/* {receivedCode && (
+              {/* Verification Code Display: Visible on screen so testing is instant without waiting for temp-mail */}
+              {testOtp && (
                 <View style={styles.infoBanner}>
                   <Ionicons name="key-outline" size={16} color="#0284C7" />
                   <Text style={styles.infoBannerText}>
-                    Code sent to your Gmail: <Text style={{ fontWeight: '800' }}>{receivedCode}</Text>
+                    Verification Code: <Text style={{ fontWeight: '800', color: '#0369A1' }}>{testOtp}</Text>
                   </Text>
                 </View>
-              )} */}
+              )}
 
               {errorMessage && (
                 <View style={styles.errorBanner}>
@@ -561,6 +573,10 @@ export default function SignUpScreen() {
                     maxLength={6}
                     autoFocus
                     caretHidden
+                    autoComplete="off"
+                    textContentType="none"
+                    importantForAutofill="no"
+                    autoCorrect={false}
                   />
                 </View>
 

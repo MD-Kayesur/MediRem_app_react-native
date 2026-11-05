@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import { setCredentials } from '@/redux/slices/authSlice';
 import { getUserSession } from '@/utils/authStorage';
+import { warmupBackend } from '@/utils/backendWarmup';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { ThemeHeaderButton } from '@/components/ThemeHeaderButton';
 
@@ -26,6 +27,9 @@ export default function WelcomeScreen() {
 
   // Auto-redirect if user already has an active session
   useEffect(() => {
+    // Warm up backend and database immediately in background on app startup
+    warmupBackend().catch(() => {});
+
     let isMounted = true;
 
     (async () => {

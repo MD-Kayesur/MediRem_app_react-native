@@ -18,6 +18,7 @@ import { useSignInMutation } from '@/redux/api/authApi';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import { setCredentials, apiSlice } from '@/redux';
 import { saveUserSession, getUserSession } from '@/utils/authStorage';
+import { warmupBackend } from '@/utils/backendWarmup';
 import { AuthUser } from '@medirem/types';
 
 export default function SignInScreen() {
@@ -38,6 +39,9 @@ export default function SignInScreen() {
 
   // Auto-redirect if already authenticated or session exists in local storage
   useEffect(() => {
+    // Warm up backend and database pool while user is looking at/typing credentials
+    warmupBackend().catch(() => {});
+
     let isMounted = true;
     (async () => {
       if (isAuthenticated && authStateUser?.id) {

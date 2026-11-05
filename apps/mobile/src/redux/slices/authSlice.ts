@@ -5,6 +5,7 @@ import { authApi } from '../api/authApi';
 export interface AuthState {
   user: AuthUser | null;
   token: string | null;
+  refreshToken: string | null;
   isAuthenticated: boolean;
   isGuest: boolean;
   isSessionRestored: boolean;
@@ -16,6 +17,7 @@ export interface AuthState {
 const initialState: AuthState = {
   user: null,
   token: null,
+  refreshToken: null,
   isAuthenticated: false,
   isGuest: false,
   isSessionRestored: false,
@@ -30,13 +32,14 @@ export const authSlice = createSlice({
   reducers: {
     setCredentials: (
       state,
-      action: PayloadAction<{ user: AuthUser; token?: string }>,
+      action: PayloadAction<{ user: AuthUser; token?: string; refreshToken?: string }>,
     ) => {
       state.user = {
         ...action.payload.user,
         createdAt: action.payload.user?.createdAt || new Date().toISOString(),
       };
       state.token = action.payload.token || null;
+      state.refreshToken = action.payload.refreshToken || null;
       state.isAuthenticated = true;
       state.isGuest = false;
       state.isSessionRestored = true;
@@ -58,6 +61,7 @@ export const authSlice = createSlice({
         createdAt: new Date().toISOString(),
       };
       state.token = null;
+      state.refreshToken = null;
       state.isAuthenticated = true;
       state.isGuest = true;
       state.isSessionRestored = true;
@@ -67,6 +71,7 @@ export const authSlice = createSlice({
     logout: (state) => {
       state.user = null;
       state.token = null;
+      state.refreshToken = null;
       state.isAuthenticated = false;
       state.isGuest = false;
       state.isSessionRestored = true;
@@ -83,11 +88,27 @@ export const authSlice = createSlice({
     builder.addMatcher(authApi.endpoints.signIn.matchFulfilled, (state, action) => {
       if (action.payload.user) {
         state.user = action.payload.user;
-        state.token = action.payload.token || null;
+        state.token = action.payload.accessToken || action.payload.token || null;
+        state.refreshToken = action.payload.refreshToken || null;
         state.isAuthenticated = true;
         state.isGuest = false;
         state.error = null;
       }
+    });
+
+    // Automatically update tokens on refresh
+    builder.addMatcher(authApi.endpoints.refreshToken.matchFulfilled, (state, action) => {
+      if (action.payload.user) {
+        state.user = action.payload.user;
+      }
+      if (action.payload.accessToken || action.payload.token) {
+        state.token = action.payload.accessToken || action.payload.token || null;
+      }
+      if (action.payload.refreshToken) {
+        state.refreshToken = action.payload.refreshToken;
+      }
+      state.isAuthenticated = true;
+      state.error = null;
     });
 
     // Automatically store pending email on sign up
