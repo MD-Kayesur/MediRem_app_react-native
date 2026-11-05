@@ -85,3 +85,13 @@ export class ResetPasswordDto {
   newPassword: string;
 }
 
+export class RefreshTokenDto {
+  @ApiProperty({
+    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+    description: 'Refresh token provided during sign in to exchange for a new access token',
+  })
+  @IsString()
+  @IsNotEmpty()
+  refreshToken: string;
+}
+

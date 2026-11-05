@@ -39,6 +39,7 @@ async function bootstrap() {
     .addTag('Medications', 'Medication schedules, dosages, pill inventory, and dose execution')
     .addTag('Doses', 'Patient dose intake logging and adherence history')
     .addTag('Health', 'System uptime, Neon Cloud PostgreSQL connectivity, and Object Storage status')
+    .addTag('Support', 'User-to-Admin bug reporting, direct support messaging, and live replies')
     .build();
 
   // 2. Create the document

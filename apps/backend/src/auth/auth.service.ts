@@ -4,6 +4,8 @@ import {
   UnauthorizedException,
   Logger,
 } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -16,8 +18,91 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly mailService: MailService,
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
   ) {}
 
+  /**
+   * Helper to parse expiration string or numeric seconds from .env
+   * Supports standard zeit/ms format: '15m', '1h', '24h', '7d', '30d' or numeric seconds '900'
+   */
+  private parseExpiresIn(val?: string): string | number {
+    if (!val) return '15m';
+    const trimmed = String(val).trim();
+    if (/^\d+$/.test(trimmed)) {
+      return parseInt(trimmed, 10);
+    }
+    return trimmed;
+  }
+
+  /**
+   * Generates both Access Token and Refresh Token with expiration times handled dynamically from .env
+   */
+  async generateTokens(userId: string, email: string, role?: string) {
+    const accessSecret =
+      this.configService.get<string>('JWT_ACCESS_SECRET') ||
+      process.env.JWT_ACCESS_SECRET ||
+      'medirem_jwt_access_super_secret_key_2026_production';
+
+    const refreshSecret =
+      this.configService.get<string>('JWT_REFRESH_SECRET') ||
+      process.env.JWT_REFRESH_SECRET ||
+      'medirem_jwt_refresh_super_secret_key_2026_production';
+
+    // Read expiration times directly from .env variables
+    const accessExpiresInRaw =
+      this.configService.get<string>('JWT_ACCESS_EXPIRES_IN') ||
+      process.env.JWT_ACCESS_EXPIRES_IN ||
+      '15m';
+
+    const refreshExpiresInRaw =
+      this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') ||
+      process.env.JWT_REFRESH_EXPIRES_IN ||
+      '7d';
+
+    const accessExpiresIn = this.parseExpiresIn(accessExpiresInRaw);
+    const refreshExpiresIn = this.parseExpiresIn(refreshExpiresInRaw);
+
+    const accessPayload = {
+      sub: userId,
+      email,
+      role: role || 'USER',
+      type: 'access',
+    };
+
+    const refreshPayload = {
+      sub: userId,
+      email,
+      type: 'refresh',
+    };
+
+    const [accessToken, refreshToken] = await Promise.all([
+      this.jwtService.signAsync(accessPayload, {
+        secret: accessSecret,
+        expiresIn: accessExpiresIn as any,
+      }),
+      this.jwtService.signAsync(refreshPayload, {
+        secret: refreshSecret,
+        expiresIn: refreshExpiresIn as any,
+      }),
+    ]);
+
+    this.logger.log(
+      `🔑 Issued tokens for user ${userId} [Access Token Exp: ${accessExpiresInRaw}, Refresh Token Exp: ${refreshExpiresInRaw}]`,
+    );
+
+    return {
+      accessToken,
+      refreshToken,
+      token: accessToken, // for backward compatibility with mobile app
+      expiresIn: accessExpiresInRaw,
+      refreshExpiresIn: refreshExpiresInRaw,
+    };
+  }
+
+  /**
+   * Legacy token generator kept for backward compatibility
+   */
   private generateToken(userId: string): string {
     const payload = `${userId}:${Date.now()}`;
     return Buffer.from(payload).toString('base64');
@@ -162,6 +247,8 @@ export class AuthService {
 
     this.logger.log(`✅ User ${user.email} verified account successfully.`);
 
+    const tokens = await this.generateTokens(updated.id, updated.email || '', updated.role);
+
     return {
       success: true,
       email: user.email,
@@ -173,8 +260,8 @@ export class AuthService {
         role: updated.role as any,
         createdAt: updated.createdAt.toISOString(),
       },
+      ...tokens,
       message: 'Account verified successfully! Please sign in with your credentials.',
-      
     };
   
   }
@@ -250,7 +337,7 @@ export class AuthService {
             isVerified: true,
           },
         });
-        const token = this.generateToken(demoUser.id);
+        const tokens = await this.generateTokens(demoUser.id, demoUser.email || '', demoUser.role);
         return {
           success: true,
           user: {
@@ -261,7 +348,7 @@ export class AuthService {
             role: demoUser.role as any,
             createdAt: demoUser.createdAt.toISOString(),
           },
-          token,
+          ...tokens,
           message: 'Signed in successfully.',
         };
       }
@@ -308,7 +395,7 @@ export class AuthService {
       }
     }
 
-    const token = this.generateToken(user.id);
+    const tokens = await this.generateTokens(user.id, user.email || '', user.role);
 
     return {
       success: true,
@@ -320,8 +407,61 @@ export class AuthService {
         role: user.role as any,
         createdAt: user.createdAt.toISOString(),
       },
-      token,
+      ...tokens,
       message: 'Signed in successfully.',
+    };
+  }
+
+  /**
+   * Refreshes access and refresh tokens using a valid refresh token.
+   * Expiration times are governed by JWT_ACCESS_EXPIRES_IN and JWT_REFRESH_EXPIRES_IN from .env
+   */
+  async refreshToken(refreshToken: string) {
+    if (!refreshToken) {
+      throw new BadRequestException('Refresh token is required.');
+    }
+
+    const refreshSecret =
+      this.configService.get<string>('JWT_REFRESH_SECRET') ||
+      process.env.JWT_REFRESH_SECRET ||
+      'medirem_jwt_refresh_super_secret_key_2026_production';
+
+    let payload: any;
+    try {
+      payload = await this.jwtService.verifyAsync(refreshToken, {
+        secret: refreshSecret,
+      });
+    } catch (err: any) {
+      this.logger.warn(`Refresh token validation error: ${err?.message || err}`);
+      throw new UnauthorizedException('Invalid or expired refresh token. Please sign in again.');
+    }
+
+    if (payload.type !== 'refresh' || !payload.sub) {
+      throw new UnauthorizedException('Invalid token type. Expected a refresh token.');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('User account associated with this token no longer exists.');
+    }
+
+    const tokens = await this.generateTokens(user.id, user.email || '', user.role);
+
+    return {
+      success: true,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone ?? undefined,
+        role: user.role as any,
+        createdAt: user.createdAt.toISOString(),
+      },
+      ...tokens,
+      message: 'Token refreshed successfully.',
     };
   }
 
@@ -366,7 +506,6 @@ export class AuthService {
       message: `A 6-digit verification code has been sent to ${user.email}.`,
       email: user.email,
       expiresInMinutes: 15,
-      code,
     };
   }
 

@@ -9,6 +9,7 @@ import {
   ForgotPasswordDto,
   VerifyResetCodeDto,
   ResetPasswordDto,
+  RefreshTokenDto,
 } from './dto/auth.dto';
 
 @ApiTags('Auth')
@@ -51,12 +52,23 @@ export class AuthController {
   @Post('login')
   @ApiOperation({
     summary: '🔑 Login with email and password',
-    description: 'Authenticates a verified user and returns user credentials and token.',
+    description: 'Authenticates a verified user and returns user credentials, access token, and refresh token (with expiration times configured via .env).',
   })
   @ApiResponse({ status: 200, description: 'Authentication successful.' })
   @ApiResponse({ status: 401, description: 'Invalid credentials or unverified email.' })
   async login(@Body() body: LoginDto) {
     return this.authService.login(body);
+  }
+
+  @Post('refresh')
+  @ApiOperation({
+    summary: '🔄 Refresh access token using refresh token',
+    description: 'Verifies the refresh token and issues a new access token and refresh token according to expiration times in .env.',
+  })
+  @ApiResponse({ status: 200, description: 'Tokens successfully refreshed.' })
+  @ApiResponse({ status: 401, description: 'Invalid or expired refresh token.' })
+  async refresh(@Body() body: RefreshTokenDto) {
+    return this.authService.refreshToken(body.refreshToken);
   }
 
   @Post('forgot-password')
