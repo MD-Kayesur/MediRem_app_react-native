@@ -119,12 +119,7 @@ export class SupportService {
     // Normal users can only read their own thread; Admins can read any thread or their own
     const threadUserId = isAdmin && targetUserId ? targetUserId : caller.id;
 
-    const messages = await this.prisma.supportMessage.findMany({
-      where: { userId: threadUserId },
-      orderBy: { createdAt: 'asc' },
-    });
-
-    // Mark messages as read by the opposite party
+    // 1. Mark incoming messages from the opposite party as read FIRST
     const oppositeRole = isAdmin ? 'USER' : 'ADMIN';
     await this.prisma.supportMessage.updateMany({
       where: {
@@ -135,12 +130,32 @@ export class SupportService {
       data: { isRead: true },
     });
 
+    // 2. Fetch all messages in chronological order (now correctly showing isRead: true)
+    const messages = await this.prisma.supportMessage.findMany({
+      where: { userId: threadUserId },
+      orderBy: { createdAt: 'asc' },
+    });
+
     return {
       success: true,
       threadUserId,
       total: messages.length,
       data: messages,
     };
+  }
+
+  /**
+   * Real-time read receipt: mark all messages sent by opposite party as read
+   */
+  async markThreadAsRead(threadUserId: string, oppositeRole: 'USER' | 'ADMIN') {
+    return this.prisma.supportMessage.updateMany({
+      where: {
+        userId: threadUserId,
+        senderRole: oppositeRole,
+        isRead: false,
+      },
+      data: { isRead: true },
+    });
   }
 
   /**

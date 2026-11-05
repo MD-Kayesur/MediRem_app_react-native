@@ -154,5 +154,33 @@ export class SupportGateway
     if (!payload?.userId) return;
     client.to(`thread_${payload.userId}`).emit('user_stop_typing', {});
   }
+
+  /**
+   * Real-time read receipt / seen status:
+   * When user or admin is viewing the thread, mark opposite party's messages as read
+   * and broadcast 'messages_read' to the thread room so checkmarks turn into double tick (✓✓)
+   */
+  @SubscribeMessage('mark_read')
+  async handleMarkRead(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: { userId: string; readerRole: 'USER' | 'ADMIN' },
+  ) {
+    if (!payload?.userId) return;
+    const threadUserId = payload.userId;
+    const oppositeRole = payload.readerRole === 'ADMIN' ? 'USER' : 'ADMIN';
+
+    await this.supportService.markThreadAsRead(threadUserId, oppositeRole);
+
+    const roomName = `thread_${threadUserId}`;
+    this.server.to(roomName).emit('messages_read', {
+      threadUserId,
+      readerRole: payload.readerRole,
+      seenAt: new Date().toISOString(),
+    });
+
+    this.server.to('admin_desk').emit('thread_updated', {
+      userId: threadUserId,
+    });
+  }
 }
 

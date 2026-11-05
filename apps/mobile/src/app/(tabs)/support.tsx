@@ -31,6 +31,7 @@ import {
   socketSendMessage,
   socketEmitTyping,
   socketEmitStopTyping,
+  socketMarkRead,
 } from '@/utils/socketService';
 
 export default function SupportScreen() {
@@ -173,8 +174,23 @@ export default function SupportScreen() {
       setTypingStatus(null);
     };
 
+    // Live real-time double tick seen update
+    const handleMessagesRead = (data: { threadUserId: string; readerRole: 'USER' | 'ADMIN' }) => {
+      if (data.threadUserId === activeThreadUserId) {
+        setSocketMessages((prev) =>
+          prev.map((m) =>
+            m.userId === data.threadUserId && m.senderRole !== data.readerRole
+              ? { ...m, isRead: true }
+              : m
+          )
+        );
+        refetchHistory();
+      }
+    };
+
     socket.on('new_message', handleNewMessage);
     socket.on('thread_updated', handleThreadUpdated);
+    socket.on('messages_read', handleMessagesRead);
     socket.on('user_typing', handleUserTyping);
     socket.on('user_stop_typing', handleUserStopTyping);
 
@@ -183,10 +199,11 @@ export default function SupportScreen() {
       socket.off('disconnect', updateConnState);
       socket.off('new_message', handleNewMessage);
       socket.off('thread_updated', handleThreadUpdated);
+      socket.off('messages_read', handleMessagesRead);
       socket.off('user_typing', handleUserTyping);
       socket.off('user_stop_typing', handleUserStopTyping);
     };
-  }, [activeThreadUserId, isAdmin, refetchAdminThreads]);
+  }, [activeThreadUserId, isAdmin, refetchAdminThreads, refetchHistory]);
 
   // 1. Admin joins 'admin_desk' immediately so all incoming messages trigger live updates on the desk
   useEffect(() => {
@@ -217,6 +234,13 @@ export default function SupportScreen() {
       }
     };
   }, [activeThreadUserId, isAdmin]);
+
+  // 3. Mark thread messages as read immediately when viewed
+  useEffect(() => {
+    if (activeThreadUserId) {
+      socketMarkRead(activeThreadUserId, isAdmin ? 'ADMIN' : 'USER');
+    }
+  }, [activeThreadUserId, isAdmin, allMessages.length]);
 
   // Auto-scroll down on new messages
   useEffect(() => {
@@ -669,11 +693,13 @@ export default function SupportScreen() {
                           {formatTimestamp(msg.createdAt)}
                         </Text>
                         {isMyMessage && (
-                          <Ionicons
-                            name={msg.isRead ? 'checkmark-done' : 'checkmark'}
-                            size={14}
-                            color={msg.isRead ? '#10B981' : '#BAE6FD'}
-                          />
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 3 }}>
+                            <Ionicons
+                              name={msg.isRead ? 'checkmark-done' : 'checkmark'}
+                              size={15}
+                              color={msg.isRead ? '#34D399' : 'rgba(255, 255, 255, 0.65)'}
+                            />
+                          </View>
                         )}
                       </View>
                     </View>

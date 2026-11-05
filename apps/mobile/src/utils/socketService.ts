@@ -100,6 +100,16 @@ export function socketEmitStopTyping(userId: string) {
 }
 
 /**
+ * Mark messages in thread as seen / read
+ */
+export function socketMarkRead(userId: string, readerRole: 'USER' | 'ADMIN') {
+  const s = getSocket();
+  if (s.connected) {
+    s.emit('mark_read', { userId, readerRole });
+  }
+}
+
+/**
  * Disconnect socket cleanly
  */
 export function disconnectSocket() {
