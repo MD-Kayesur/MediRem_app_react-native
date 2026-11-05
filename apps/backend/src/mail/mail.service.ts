@@ -19,6 +19,9 @@ export class MailService {
     if (user && pass && (host?.includes('gmail') || user.includes('@gmail.com'))) {
       this.transporter = nodemailer.createTransport({
         service: 'gmail',
+        pool: true,
+        maxConnections: 3,
+        maxMessages: 50,
         auth: {
           user: user.trim(),
           pass,
@@ -30,6 +33,8 @@ export class MailService {
         host,
         port: Number(process.env.SMTP_PORT) || 465,
         secure: process.env.SMTP_SECURE === 'true' || Number(process.env.SMTP_PORT) === 465,
+        pool: true,
+        maxConnections: 3,
         auth: { user: user.trim(), pass },
       });
       this.logger.log(`Nodemailer configured with SMTP host: ${host}`);
@@ -64,6 +69,12 @@ export class MailService {
     userName: string,
     code: string,
   ): Promise<{ success: boolean; messageId?: string; previewUrl?: string }> {
+    const cleanRecipient = (toEmail || '').trim().toLowerCase();
+    if (!cleanRecipient) {
+      this.logger.error('❌ Cannot send signup OTP: recipient email is missing');
+      return { success: false };
+    }
+
     if (!this.transporter) {
       await this.initTransporter();
     }
@@ -136,17 +147,23 @@ export class MailService {
     try {
       const info = await this.transporter!.sendMail({
         from: fromAddress,
-        to: toEmail,
+        to: cleanRecipient, // Strictly dispatched to the registered user's email only
         subject: `[${code}] Verify Your MediRem Account`,
         text: `Hello ${userName},\n\nYour MediRem registration verification code is: ${code}\n\nValid for 15 minutes. Enter this code in your app to activate your account and proceed to Login.`,
         html: htmlContent,
+        priority: 'high',
+        headers: {
+          'X-Priority': '1',
+          'X-MSMail-Priority': 'High',
+          Importance: 'high',
+        },
       });
 
-      this.logger.log(`✅ Signup verification email sent to ${toEmail} (MessageId: ${info.messageId || 'sent'})`);
+      this.logger.log(`✅ Signup verification email strictly sent to recipient: ${cleanRecipient} (MessageId: ${info.messageId || 'sent'})`);
       return { success: true, messageId: info.messageId };
     } catch (err: any) {
-      this.logger.error(`❌ Failed to send signup email via nodemailer: ${err.message}`);
-      this.logger.warn(`🔑 [DEV FALLBACK] Signup verification code for ${toEmail}: ${code}`);
+      this.logger.error(`❌ Failed to send signup email to ${cleanRecipient}: ${err.message}`);
+      this.logger.warn(`🔑 [DEV FALLBACK] Signup verification code for ${cleanRecipient}: ${code}`);
       return { success: false };
     }
   }
@@ -159,6 +176,12 @@ export class MailService {
     userName: string,
     code: string,
   ): Promise<{ success: boolean; messageId?: string; previewUrl?: string }> {
+    const cleanRecipient = (toEmail || '').trim().toLowerCase();
+    if (!cleanRecipient) {
+      this.logger.error('❌ Cannot send reset OTP: recipient email is missing');
+      return { success: false };
+    }
+
     if (!this.transporter) {
       await this.initTransporter();
     }
@@ -231,17 +254,23 @@ export class MailService {
     try {
       const info = await this.transporter!.sendMail({
         from: fromAddress,
-        to: toEmail,
+        to: cleanRecipient, // Strictly dispatched to the target recipient only
         subject: `[${code}] Your MediRem Password Reset Verification Code`,
         text: `Hello ${userName},\n\nYour MediRem verification code is: ${code}\n\nThis code expires in 15 minutes. If you did not request this, please ignore this email.`,
         html: htmlContent,
+        priority: 'high',
+        headers: {
+          'X-Priority': '1',
+          'X-MSMail-Priority': 'High',
+          Importance: 'high',
+        },
       });
 
-      this.logger.log(`✅ Verification email sent to ${toEmail} (MessageId: ${info.messageId || 'sent'})`);
+      this.logger.log(`✅ Verification email strictly sent to recipient: ${cleanRecipient} (MessageId: ${info.messageId || 'sent'})`);
       return { success: true, messageId: info.messageId };
     } catch (err: any) {
-      this.logger.error(`❌ Failed to send email via nodemailer: ${err.message}`);
-      this.logger.warn(`🔑 [DEV FALLBACK] Verification code for ${toEmail}: ${code}`);
+      this.logger.error(`❌ Failed to send reset email to ${cleanRecipient}: ${err.message}`);
+      this.logger.warn(`🔑 [DEV FALLBACK] Verification code for ${cleanRecipient}: ${code}`);
       return { success: false };
     }
   }
