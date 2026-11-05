@@ -22,7 +22,14 @@
         "backgroundImage": "./apps/mobile/assets/images/android-icon-background.png",
         "monochromeImage": "./apps/mobile/assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ],
+      "package": "com.md_kayesur.MediRem"
     },
     "web": {
       "output": "server",
@@ -47,7 +54,11 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "066f27ad-911c-4ebd-9d48-5e4585e22c5d"
+      }
     }
   }
 }
-
