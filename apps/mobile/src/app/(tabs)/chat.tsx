@@ -8,510 +8,677 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
   Alert,
-  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { router, useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useAppSelector } from '@/redux/hooks';
 import { selectCurrentUser } from '@/redux/slices/authSlice';
-import { useGetMedicationsQuery, useSendChatMessageMutation } from '@/redux';
+import {
+  useGetSupportMessagesQuery,
+  useSendSupportMessageMutation,
+  useGetAdminThreadsQuery,
+} from '@/redux';
+import { SupportMessage, SupportThread } from '@medirem/types';
 import { useAppTheme } from '@/hooks/useAppTheme';
-import { ThemeHeaderButton } from '@/components/ThemeHeaderButton';
-
-interface ChatMessage {
-  id: string;
-  sender: 'ai' | 'user';
-  text: string;
-  timestamp: string;
-  category?: string;
-  quickReplies?: string[];
-  isLiveAi?: boolean;
-}
-
-let messageCounter = 0;
-function createUniqueId(prefix: string): string {
-  messageCounter += 1;
-  return `${prefix}_${messageCounter}`;
-}
-
-function getFormattedTime(): string {
-  const d = new Date();
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
+import {
+  getSocket,
+  socketJoinThread,
+  socketLeaveThread,
+  socketSendMessage,
+  socketEmitTyping,
+  socketEmitStopTyping,
+} from '@/utils/socketService';
 
 export default function ChatScreen() {
   const { timeTheme } = useAppTheme();
-  const user = useAppSelector(selectCurrentUser);
-  const activeUserId = user?.id;
+  const currentUser = useAppSelector(selectCurrentUser);
+  const isAdmin = currentUser?.role === 'ADMIN';
 
-  // Real medications from Neon Cloud PostgreSQL for this specific user
-  const { data: dbMeds = [] } = useGetMedicationsQuery(activeUserId, {
-    refetchOnMountOrArgChange: true,
+  const params = useLocalSearchParams<{ targetUserId?: string; userName?: string }>();
+  const [selectedThreadUser, setSelectedThreadUser] = useState<{
+    id: string;
+    name: string;
+    email?: string | null;
+  } | null>(
+    params.targetUserId
+      ? { id: params.targetUserId, name: params.userName || 'User' }
+      : null
+  );
+
+  const [inputMessage, setInputMessage] = useState('');
+  const [isSocketConnected, setIsSocketConnected] = useState(false);
+  const [typingStatus, setTypingStatus] = useState<string | null>(null);
+  const [socketMessages, setSocketMessages] = useState<SupportMessage[]>([]);
+
+  const scrollViewRef = useRef<any>(null);
+  const typingTimeoutRef = useRef<any>(null);
+
+  // Active thread owner: regular user has their own thread; Admin views selected user's thread
+  const activeThreadUserId = isAdmin ? selectedThreadUser?.id : currentUser?.id;
+
+  // 1. Permanently maintained history from Neon Cloud PostgreSQL
+  const {
+    data: threadResponse,
+    isLoading: isLoadingHistory,
+    isFetching: isFetchingHistory,
+    refetch: refetchHistory,
+  } = useGetSupportMessagesQuery(activeThreadUserId, {
+    skip: !activeThreadUserId,
   });
 
-  const [sendChatMessageMutation] = useSendChatMessageMutation();
+  // For Admin: query all user conversation threads from database
+  const {
+    data: adminThreadsResponse,
+    isLoading: isLoadingAdminThreads,
+    refetch: refetchAdminThreads,
+  } = useGetAdminThreadsQuery(undefined, {
+    skip: !isAdmin,
+  });
 
-  const initialGreeting = useMemo<ChatMessage>(() => {
-    const patientName = user?.name || 'Friend';
-    const medsCount = dbMeds.length;
-    const medSummary =
-      medsCount > 0
-        ? `I have access to your **${medsCount}** scheduled medication(s) (${dbMeds.map((m) => m.name).join(', ')}).`
-        : 'You currently have no active medications in your schedule. You can add one in the Meds tab!';
+  const [sendMessageApi, { isLoading: isSending }] = useSendSupportMessageMutation();
 
-    return {
-      id: 'welcome-init',
-      sender: 'ai',
-      text: `Hello **${patientName}**! 👋 I'm your **MediRem AI Personal Medical Assistant**.\n\n${medSummary}\n\nAsk me anything about your dose schedules, instructions, remaining pills, side effects, or food guidelines!`,
-      timestamp: 'Just now',
-      quickReplies:
-        medsCount > 0
-          ? ['💊 What are my medications?', '⏰ Today schedule', '📦 Check pills left']
-          : ['📋 How to add medications?', '⏰ Missed dose rule', '🔔 Alarm features'],
+  // Combine permanently stored DB messages with real-time incoming Socket.IO messages
+  const allMessages = useMemo(() => {
+    const map = new Map<string, SupportMessage>();
+    // Stored database history
+    (threadResponse?.data || []).forEach((m) => map.set(m.id, m));
+    // Live socket messages
+    socketMessages.forEach((m) => map.set(m.id, m));
+    return Array.from(map.values()).sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+  }, [threadResponse?.data, socketMessages]);
+
+  const adminThreads: SupportThread[] = adminThreadsResponse?.data || [];
+
+  // ==========================================
+  // REAL-TIME SOCKET.IO EVENT LISTENERS
+  // ==========================================
+  useEffect(() => {
+    const socket = getSocket();
+
+    const updateConnState = () => {
+      setIsSocketConnected(socket.connected);
     };
-  }, [user?.name, dbMeds]);
 
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [inputText, setInputText] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const scrollViewRef = useRef<any>(null);
-  const [pulseAnim] = useState(() => new Animated.Value(1));
+    socket.on('connect', updateConnState);
+    socket.on('disconnect', updateConnState);
+    updateConnState();
 
-  // Dynamically derive messages with initial greeting when empty
-  const allMessages = useMemo<ChatMessage[]>(() => {
-    return messages.length === 0 ? [initialGreeting] : messages;
-  }, [messages, initialGreeting]);
-
-  // Dynamic Suggestion Chips tailored to this user's live database records
-  const dynamicChips = useMemo(() => {
-    const chips: { label: string; query: string }[] = [];
-
-    if (dbMeds && dbMeds.length > 0) {
-      chips.push({
-        label: '💊 My Schedule',
-        query: 'What medications am I scheduled to take today?',
-      });
-      chips.push({
-        label: '📦 Pills Left',
-        query: 'How many pills do I have remaining in my inventory?',
-      });
-      chips.push({
-        label: `⏰ ${dbMeds[0].name} Timing`,
-        query: `When and how should I take ${dbMeds[0].name}?`,
-      });
-      if (dbMeds.length > 1) {
-        chips.push({
-          label: `🔍 ${dbMeds[1].name} Instructions`,
-          query: `What are the dosage and instructions for ${dbMeds[1].name}?`,
+    // Live incoming message via Socket.IO
+    const handleNewMessage = (newMsg: SupportMessage) => {
+      if (newMsg && newMsg.userId === activeThreadUserId) {
+        setSocketMessages((prev) => {
+          if (prev.some((m) => m.id === newMsg.id)) return prev;
+          return [...prev, newMsg];
         });
+        setTimeout(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 80);
       }
-      chips.push({
-        label: '⚠️ Missed Dose',
-        query: 'What should I do if I miss a scheduled dose?',
-      });
-      chips.push({
-        label: '🍎 Food Advice',
-        query: 'Which of my medications should be taken with or after food?',
-      });
-    } else {
-      chips.push({
-        label: '📋 My Medications',
-        query: 'What medications do I have in my schedule?',
-      });
-      chips.push({
-        label: '⏰ Missed Dose Rule',
-        query: 'What should I do if I miss a scheduled dose?',
-      });
-      chips.push({
-        label: '🍎 Food & Medicine',
-        query: 'What medications must be taken with food?',
-      });
-      chips.push({
-        label: '🔔 MediRem Alarms',
-        query: 'How do MediRem alarms and repeat alerts work?',
-      });
+    };
+
+    // Live Admin inbox thread update
+    const handleThreadUpdated = () => {
+      if (isAdmin) {
+        refetchAdminThreads();
+      }
+    };
+
+    // Live typing indicator
+    const handleUserTyping = (data: { name: string; role: 'USER' | 'ADMIN' }) => {
+      setTypingStatus(`${data.role === 'ADMIN' ? 'Admin' : data.name} is typing...`);
+    };
+
+    const handleUserStopTyping = () => {
+      setTypingStatus(null);
+    };
+
+    socket.on('new_message', handleNewMessage);
+    socket.on('message_sent', handleNewMessage);
+    socket.on('thread_updated', handleThreadUpdated);
+    socket.on('user_typing', handleUserTyping);
+    socket.on('user_stop_typing', handleUserStopTyping);
+
+    return () => {
+      socket.off('connect', updateConnState);
+      socket.off('disconnect', updateConnState);
+      socket.off('new_message', handleNewMessage);
+      socket.off('message_sent', handleNewMessage);
+      socket.off('thread_updated', handleThreadUpdated);
+      socket.off('user_typing', handleUserTyping);
+      socket.off('user_stop_typing', handleUserStopTyping);
+    };
+  }, [activeThreadUserId, isAdmin, refetchAdminThreads]);
+
+  // Join the thread room on socket connect/change
+  useEffect(() => {
+    if (activeThreadUserId) {
+      socketJoinThread(activeThreadUserId, currentUser?.role);
+    }
+    return () => {
+      if (activeThreadUserId) {
+        socketLeaveThread(activeThreadUserId);
+      }
+    };
+  }, [activeThreadUserId, currentUser?.role]);
+
+  // Auto-scroll down on new messages
+  useEffect(() => {
+    if (allMessages.length > 0) {
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 120);
+    }
+  }, [allMessages.length]);
+
+  // Handle typing event emission
+  const handleInputChange = (text: string) => {
+    setInputMessage(text);
+    if (!activeThreadUserId || !currentUser) return;
+
+    socketEmitTyping(activeThreadUserId, currentUser.name, currentUser.role as any);
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    typingTimeoutRef.current = setTimeout(() => {
+      socketEmitStopTyping(activeThreadUserId);
+    }, 1500);
+  };
+
+  // Send message: emits via Socket.IO for sub-millisecond delivery & persists in Neon DB
+  const handleSend = async (customText?: string) => {
+    const textToSend = (customText || inputMessage).trim();
+    if (!textToSend || isSending) return;
+
+    if (isAdmin && !selectedThreadUser?.id) {
+      Alert.alert('Notice', 'Please select a user thread first to send an Admin reply.');
+      return;
     }
 
-    return chips;
-  }, [dbMeds]);
+    if (activeThreadUserId) {
+      socketEmitStopTyping(activeThreadUserId);
+    }
 
-  // Pulse animation for online indicator
-  useEffect(() => {
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 0.4,
-          duration: 900,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 900,
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-    pulse.start();
-    return () => pulse.stop();
-  }, [pulseAnim]);
+    setInputMessage('');
 
-  // Scroll to bottom on new messages
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      scrollViewRef.current?.scrollToEnd({ animated: true });
-    }, 150);
-    return () => clearTimeout(timer);
-  }, [allMessages, isTyping]);
+    // 1. Real-time Socket.IO emission
+    socketSendMessage({
+      senderId: currentUser?.id || '',
+      senderEmail: currentUser?.email || undefined,
+      message: textToSend,
+      userId: isAdmin ? selectedThreadUser?.id : undefined,
+    });
 
-  const handleSendMessage = async (textToSend?: string) => {
-    const text = (textToSend || inputText).trim();
-    if (!text || isTyping) return;
-
-    const userMsg: ChatMessage = {
-      id: createUniqueId('user'),
-      sender: 'user',
-      text,
-      timestamp: getFormattedTime(),
-    };
-
-    setMessages((prev) => [...prev, userMsg]);
-    setInputText('');
-    setIsTyping(true);
-
+    // 2. Persistent Neon Cloud database storage
     try {
-      // Build conversation history (up to last 6 messages)
-      const conversationHistory = messages.slice(-6).map((m) => ({
-        sender: m.sender,
-        text: m.text,
-      }));
-
-      // Send to Backend AI API with strict User ID isolation
-      const res = await sendChatMessageMutation({
-        message: text,
-        userId: user?.id,
-        userEmail: user?.email,
-        conversationHistory,
+      await sendMessageApi({
+        message: textToSend,
+        userId: isAdmin ? selectedThreadUser?.id : undefined,
       }).unwrap();
 
-      const aiMsg: ChatMessage = {
-        id: createUniqueId('ai'),
-        sender: 'ai',
-        text: res.text,
-        timestamp: getFormattedTime(),
-        quickReplies: res.quickReplies,
-        isLiveAi: res.isLiveAi,
-      };
-
-      setMessages((prev) => [...prev, aiMsg]);
-    } catch {
-      // Offline fallback: Answer using client-cached database medications!
-      const fallbackReply = generateLocalDatabaseFallback(text, user, dbMeds);
-      const aiMsg: ChatMessage = {
-        id: createUniqueId('ai'),
-        sender: 'ai',
-        text: fallbackReply.text,
-        timestamp: getFormattedTime(),
-        quickReplies: fallbackReply.quickReplies,
-        isLiveAi: false,
-      };
-      setMessages((prev) => [...prev, aiMsg]);
-    } finally {
-      setIsTyping(false);
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    } catch (err: any) {
+      console.warn('[Chat] Message persistence note:', err?.message || err);
     }
   };
 
-  const handleClearChat = () => {
-    Alert.alert(
-      'Reset Conversation?',
-      'Clear chat history and start a fresh session with your medical assistant?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset',
-          style: 'destructive',
-          onPress: () => setMessages([]),
-        },
-      ],
-    );
+  const formatTimestamp = (isoDate: string) => {
+    try {
+      const d = new Date(isoDate);
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return '';
+    }
   };
 
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: timeTheme.colors.background }]} edges={['top', 'left', 'right']}>
-      {/* Header Bar */}
-      <View style={[styles.header, { backgroundColor: timeTheme.colors.headerBg, borderBottomColor: timeTheme.colors.cardBorder }]}>
-        <View style={styles.headerLeft}>
-          <View style={styles.botAvatar}>
-            <LinearBotIcon />
-            <Animated.View style={[styles.onlineDot, { opacity: pulseAnim }]} />
-          </View>
-          <View>
-            <View style={styles.titleRow}>
-              <Text style={[styles.headerTitle, { color: timeTheme.colors.textPrimary }]}>MediRem AI</Text>
-              <View style={styles.aiBadge}>
-                <Ionicons name="sparkles" size={10} color="#FFFFFF" />
-                <Text style={styles.aiBadgeText}>Assistant</Text>
+  // ==========================================
+  // VIEW 1: ADMIN INBOX (Admin viewing all incoming user messages)
+  // ==========================================
+  if (isAdmin && !selectedThreadUser) {
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: timeTheme.colors.background }]}
+        edges={['top', 'left', 'right']}>
+        {/* Admin Header */}
+        <View
+          style={[
+            styles.header,
+            {
+              backgroundColor: timeTheme.colors.card,
+              borderBottomColor: timeTheme.colors.cardBorder,
+            },
+          ]}>
+          <TouchableOpacity
+            onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/profile'))}
+            style={[styles.headerBtn, { borderColor: timeTheme.colors.cardBorder }]}
+            activeOpacity={0.7}>
+            <Ionicons name="arrow-back" size={20} color={timeTheme.colors.textPrimary} />
+          </TouchableOpacity>
+
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={[styles.headerTitle, { color: timeTheme.colors.textPrimary }]}>
+                Admin Support Desk
+              </Text>
+              <View style={styles.adminBadge}>
+                <Ionicons name="shield-checkmark" size={11} color="#FFFFFF" />
+                <Text style={styles.adminBadgeText}>ADMIN</Text>
               </View>
             </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 1 }}>
+              <View
+                style={[
+                  styles.socketDot,
+                  { backgroundColor: isSocketConnected ? '#10B981' : '#F59E0B' },
+                ]}
+              />
+              <Text style={[styles.headerSubtitle, { color: timeTheme.colors.textSecondary }]}>
+                {isSocketConnected ? 'Socket.IO Live' : 'Connecting WebSocket...'} •{' '}
+                {adminThreads.length} User Conversations
+              </Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            onPress={() => refetchAdminThreads()}
+            style={[styles.headerBtn, { borderColor: timeTheme.colors.cardBorder }]}
+            activeOpacity={0.7}>
+            <Ionicons name="refresh" size={18} color="#208AEF" />
+          </TouchableOpacity>
+        </View>
+
+        {/* User Threads List */}
+        {isLoadingAdminThreads ? (
+          <View style={styles.centerContainer}>
+            <ActivityIndicator size="large" color="#208AEF" />
+            <Text style={[styles.loadingText, { color: timeTheme.colors.textSecondary }]}>
+              Loading user support threads...
+            </Text>
+          </View>
+        ) : adminThreads.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyIconBox}>
+              <Ionicons name="chatbubbles-outline" size={42} color="#94A3B8" />
+            </View>
+            <Text style={[styles.emptyTitle, { color: timeTheme.colors.textPrimary }]}>
+              No User Messages Yet
+            </Text>
+            <Text style={[styles.emptySub, { color: timeTheme.colors.textSecondary }]}>
+              When users report a bug or message the admin, their conversations will appear here
+              in real time with unread counters.
+            </Text>
+          </View>
+        ) : (
+          <ScrollView contentContainerStyle={styles.threadsList}>
+            {adminThreads.map((thread) => {
+              const hasUnread = thread.unreadCount > 0;
+              return (
+                <TouchableOpacity
+                  key={thread.userId}
+                  style={[
+                    styles.threadCard,
+                    {
+                      backgroundColor: timeTheme.colors.card,
+                      borderColor: hasUnread ? '#208AEF' : timeTheme.colors.cardBorder,
+                    },
+                  ]}
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    setSelectedThreadUser({
+                      id: thread.userId,
+                      name: thread.user?.name || 'User',
+                      email: thread.user?.email,
+                    });
+                  }}>
+                  <View style={styles.threadAvatar}>
+                    <Text style={styles.threadAvatarText}>
+                      {(thread.user?.name || 'U').charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1, marginRight: 10 }}>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      }}>
+                      <Text style={[styles.threadUserName, { color: timeTheme.colors.textPrimary }]}>
+                        {thread.user?.name || 'User'}
+                      </Text>
+                      <Text style={[styles.threadTime, { color: timeTheme.colors.textSecondary }]}>
+                        {formatTimestamp(thread.lastMessage.createdAt)}
+                      </Text>
+                    </View>
+                    <Text style={[styles.threadEmail, { color: timeTheme.colors.textSecondary }]}>
+                      {thread.user?.email || 'No email provided'}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.threadLastMsg,
+                        {
+                          color: hasUnread
+                            ? timeTheme.colors.textPrimary
+                            : timeTheme.colors.textSecondary,
+                        },
+                        hasUnread && { fontWeight: '700' },
+                      ]}
+                      numberOfLines={1}>
+                      {thread.lastMessage.senderRole === 'ADMIN' ? 'You: ' : ''}
+                      {thread.lastMessage.message}
+                    </Text>
+                  </View>
+                  {hasUnread ? (
+                    <View style={styles.unreadBadge}>
+                      <Text style={styles.unreadBadgeText}>{thread.unreadCount}</Text>
+                    </View>
+                  ) : (
+                    <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        )}
+      </SafeAreaView>
+    );
+  }
+
+  // ==========================================
+  // VIEW 2: 1-ON-1 CONVERSATION (User messaging Admin, or Admin in user thread)
+  // ==========================================
+  return (
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: timeTheme.colors.background }]}
+      edges={['top', 'left', 'right']}>
+      {/* Top Header Card: Shows Admin Profile & Real-Time Status */}
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: timeTheme.colors.card,
+            borderBottomColor: timeTheme.colors.cardBorder,
+          },
+        ]}>
+        <TouchableOpacity
+          onPress={() => {
+            if (isAdmin && selectedThreadUser) {
+              setSelectedThreadUser(null);
+            } else if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/(tabs)/profile');
+            }
+          }}
+          style={[styles.headerBtn, { borderColor: timeTheme.colors.cardBorder }]}
+          activeOpacity={0.7}>
+          <Ionicons name="arrow-back" size={20} color={timeTheme.colors.textPrimary} />
+        </TouchableOpacity>
+
+        {/* Profile Details of the Other Party */}
+        <View style={styles.headerProfileBox}>
+          <View style={styles.headerAvatarContainer}>
+            <View
+              style={[
+                styles.headerAvatar,
+                { backgroundColor: isAdmin ? '#208AEF' : '#059669' },
+              ]}>
+              <Ionicons
+                name={isAdmin ? 'person' : 'shield-checkmark'}
+                size={18}
+                color="#FFFFFF"
+              />
+            </View>
+            <View
+              style={[
+                styles.headerOnlineDot,
+                { backgroundColor: isSocketConnected ? '#10B981' : '#F59E0B' },
+              ]}
+            />
+          </View>
+
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={[styles.headerTitle, { color: timeTheme.colors.textPrimary }]}>
+                {isAdmin
+                  ? selectedThreadUser?.name || 'User'
+                  : 'MediRem Support Admin'}
+              </Text>
+              <View
+                style={[
+                  styles.verifiedBadge,
+                  { backgroundColor: isAdmin ? '#EFF6FF' : '#DCFCE7' },
+                ]}>
+                <Ionicons
+                  name="shield-checkmark"
+                  size={10}
+                  color={isAdmin ? '#208AEF' : '#15803D'}
+                />
+                <Text
+                  style={[
+                    styles.verifiedBadgeText,
+                    { color: isAdmin ? '#1D4ED8' : '#15803D' },
+                  ]}>
+                  {isAdmin ? 'USER' : 'VERIFIED ADMIN'}
+                </Text>
+              </View>
+            </View>
+
             <Text style={[styles.headerSubtitle, { color: timeTheme.colors.textSecondary }]}>
-              {user?.name ? `${user.name}'s Medical Copilot` : '24/7 Smart Medication Guide'}
+              {isAdmin
+                ? selectedThreadUser?.email || 'User'
+                : 'Direct Socket.IO • History saved & maintained'}
             </Text>
           </View>
         </View>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <ThemeHeaderButton size={36} />
-          <TouchableOpacity
-            onPress={handleClearChat}
-            style={[
-              styles.clearBtn,
-              {
-                backgroundColor: timeTheme.colors.surfaceBg,
-                borderColor: timeTheme.colors.cardBorder,
-                borderWidth: 1,
-              },
-            ]}
-            activeOpacity={0.7}
-            accessibilityLabel="Reset conversation">
-            <Ionicons name="refresh" size={18} color={timeTheme.colors.textSecondary} />
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          onPress={() => refetchHistory()}
+          style={[styles.headerBtn, { borderColor: timeTheme.colors.cardBorder }]}
+          activeOpacity={0.7}>
+          {isFetchingHistory ? (
+            <ActivityIndicator size="small" color="#208AEF" />
+          ) : (
+            <Ionicons name="refresh" size={18} color="#208AEF" />
+          )}
+        </TouchableOpacity>
       </View>
 
-      {/* Suggestion Chips Horizontal Bar */}
-      <View
-        style={[
-          styles.chipsContainer,
-          {
-            backgroundColor: timeTheme.colors.surfaceBg,
-            borderBottomColor: timeTheme.colors.cardBorder,
-          },
-        ]}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipsScroll}>
-          {dynamicChips.map((chip, idx) => (
-            <TouchableOpacity
-              key={idx}
-              onPress={() => handleSendMessage(chip.query)}
-              style={[
-                styles.chipButton,
-                {
-                  backgroundColor: timeTheme.isDark || timeTheme.isEvening ? '#1E293B' : '#EFF6FF',
-                  borderColor: timeTheme.isDark || timeTheme.isEvening ? '#334155' : '#BFDBFE',
-                },
-              ]}
-              activeOpacity={0.75}>
-              <Text
-                style={[
-                  styles.chipText,
-                  { color: timeTheme.isDark || timeTheme.isEvening ? '#38BDF8' : '#208AEF' },
-                ]}>
-                {chip.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-
-      {/* Chat Messages Stream */}
-      <ScrollView
-        ref={scrollViewRef}
-        style={styles.messagesScroll}
-        contentContainerStyle={styles.messagesContent}
-        showsVerticalScrollIndicator={false}>
-        {allMessages.map((msg) => {
-          const isAi = msg.sender === 'ai';
-          return (
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 0}>
+        {/* Message Stream */}
+        {isLoadingHistory && allMessages.length === 0 ? (
+          <View style={styles.centerContainer}>
+            <ActivityIndicator size="large" color="#208AEF" />
+            <Text style={[styles.loadingText, { color: timeTheme.colors.textSecondary }]}>
+              Loading conversation history from database...
+            </Text>
+          </View>
+        ) : (
+          <ScrollView
+            ref={scrollViewRef}
+            contentContainerStyle={styles.messagesContent}
+            showsVerticalScrollIndicator={false}>
+            {/* Top Admin Welcome & Notice Banner */}
             <View
-              key={msg.id}
               style={[
-                styles.messageRow,
-                isAi ? styles.messageRowAi : styles.messageRowUser,
+                styles.adminWelcomeCard,
+                {
+                  backgroundColor: timeTheme.isDark ? '#0B233A' : '#EFF6FF',
+                  borderColor: timeTheme.isDark ? '#1E3A8A' : '#BFDBFE',
+                },
               ]}>
-              {/* Bot Avatar on the left */}
-              {isAi && (
-                <View
-                  style={[
-                    styles.msgAvatarBox,
-                    {
-                      backgroundColor: timeTheme.isDark || timeTheme.isEvening ? '#1E293B' : '#EFF6FF',
-                      borderColor: timeTheme.colors.cardBorder,
-                    },
-                  ]}>
-                  <Ionicons name="sparkles" size={14} color="#208AEF" />
-                </View>
-              )}
+              <View style={styles.adminWelcomeIconBox}>
+                <Ionicons name="chatbubbles" size={20} color="#FFFFFF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.adminWelcomeTitle, { color: timeTheme.colors.textPrimary }]}>
+                  {isAdmin ? 'Admin Reply Terminal' : 'Official Admin Support Desk'}
+                </Text>
+                <Text style={[styles.adminWelcomeSub, { color: timeTheme.colors.textSecondary }]}>
+                  {isAdmin
+                    ? 'Reply to this user\'s bug report. Messages are transmitted live via Socket.IO and stored in Neon DB.'
+                    : 'Describe any bugs, alarm glitches, or medication sync issues. Admin receives your message and replies right here!'}
+                </Text>
+              </View>
+            </View>
 
-              <View
-                style={[
-                  styles.bubble,
-                  isAi
-                    ? [
-                        styles.bubbleAi,
-                        {
-                          backgroundColor: timeTheme.colors.card,
-                          borderColor: timeTheme.colors.cardBorder,
-                        },
-                      ]
-                    : styles.bubbleUser,
-                ]}>
-                {/* Formatted Message Content */}
-                <FormattedText text={msg.text} isAi={isAi} isDark={timeTheme.isDark || timeTheme.isEvening} />
+            {allMessages.length === 0 ? (
+              <View style={styles.emptyThreadBox}>
+                <Ionicons name="chatbubble-ellipses-outline" size={38} color="#94A3B8" />
+                <Text style={[styles.emptyThreadTitle, { color: timeTheme.colors.textPrimary }]}>
+                  Start Conversation with Admin
+                </Text>
+                <Text style={[styles.emptyThreadSub, { color: timeTheme.colors.textSecondary }]}>
+                  {isAdmin
+                    ? 'No messages sent by this user yet.'
+                    : 'Send a message below to reach the Admin directly.'}
+                </Text>
+              </View>
+            ) : (
+              allMessages.map((msg) => {
+                const isMsgFromAdmin = msg.senderRole === 'ADMIN';
+                const isMyMessage = isAdmin ? isMsgFromAdmin : !isMsgFromAdmin;
 
-                {/* Timestamp & Source badge */}
-                <View style={styles.metaRow}>
-                  <Text
-                    style={[
-                      styles.timestamp,
-                      isAi ? styles.timestampAi : styles.timestampUser,
-                    ]}>
-                    {msg.timestamp}
-                  </Text>
-                  {isAi && (
-                    <Text style={styles.aiSourceText}>
-                      {msg.isLiveAi ? '• Real AI' : '• Database'}
-                    </Text>
-                  )}
-                </View>
-
-                {/* Follow-up Quick Action Pills */}
-                {isAi && msg.quickReplies && msg.quickReplies.length > 0 && (
+                return (
                   <View
+                    key={msg.id}
                     style={[
-                      styles.quickRepliesBox,
-                      { borderTopColor: timeTheme.colors.cardBorder },
+                      styles.msgRow,
+                      isMyMessage ? styles.msgRowRight : styles.msgRowLeft,
                     ]}>
-                    {msg.quickReplies.map((reply, rIdx) => (
-                      <TouchableOpacity
-                        key={rIdx}
-                        onPress={() => handleSendMessage(reply)}
-                        style={[
-                          styles.quickReplyPill,
-                          {
-                            backgroundColor: timeTheme.isDark || timeTheme.isEvening ? '#1E293B' : '#EFF6FF',
-                            borderColor: timeTheme.colors.cardBorder,
-                          },
-                        ]}
-                        activeOpacity={0.75}>
-                        <Ionicons name="chatbubble-ellipses-outline" size={11} color="#208AEF" />
+                    <View
+                      style={[
+                        styles.msgBubble,
+                        isMyMessage
+                          ? styles.myBubble
+                          : [
+                              styles.otherBubble,
+                              {
+                                backgroundColor: timeTheme.colors.card,
+                                borderColor: timeTheme.colors.cardBorder,
+                              },
+                            ],
+                      ]}>
+                      {/* Sender identification header */}
+                      <View style={styles.bubbleHeader}>
+                        <View
+                          style={[
+                            styles.roleChip,
+                            isMsgFromAdmin ? styles.adminRoleChip : styles.userRoleChip,
+                          ]}>
+                          <Ionicons
+                            name={isMsgFromAdmin ? 'shield-checkmark' : 'person'}
+                            size={10}
+                            color="#FFFFFF"
+                          />
+                          <Text style={styles.roleChipText}>
+                            {isMsgFromAdmin ? 'ADMIN' : 'USER'}
+                          </Text>
+                        </View>
                         <Text
                           style={[
-                            styles.quickReplyText,
-                            { color: timeTheme.isDark || timeTheme.isEvening ? '#38BDF8' : '#208AEF' },
+                            styles.senderName,
+                            { color: isMyMessage ? '#E0F2FE' : timeTheme.colors.textSecondary },
                           ]}>
-                          {reply}
+                          {msg.senderName}
                         </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-              </View>
-            </View>
-          );
-        })}
+                      </View>
 
-        {/* Real-time Typing Bubble */}
-        {isTyping && (
-          <View style={[styles.messageRow, styles.messageRowAi]}>
-            <View
-              style={[
-                styles.msgAvatarBox,
-                {
-                  backgroundColor: timeTheme.isDark || timeTheme.isEvening ? '#1E293B' : '#EFF6FF',
-                  borderColor: timeTheme.colors.cardBorder,
-                },
-              ]}>
-              <Ionicons name="sparkles" size={14} color="#208AEF" />
-            </View>
-            <View
-              style={[
-                styles.bubble,
-                styles.bubbleAi,
-                styles.typingBubble,
-                {
-                  backgroundColor: timeTheme.colors.card,
-                  borderColor: timeTheme.colors.cardBorder,
-                },
-              ]}>
-              <Text
-                style={[
-                  styles.typingText,
-                  { color: timeTheme.colors.textSecondary },
-                ]}>
-                MediRem AI is analyzing records...
-              </Text>
-              <View style={styles.dotsRow}>
-                <View style={[styles.dot, styles.dot1]} />
-                <View style={[styles.dot, styles.dot2]} />
-                <View style={[styles.dot, styles.dot3]} />
+                      {/* Message Content */}
+                      <Text
+                        style={[
+                          styles.msgText,
+                          { color: isMyMessage ? '#FFFFFF' : timeTheme.colors.textPrimary },
+                        ]}>
+                        {msg.message}
+                      </Text>
+
+                      {/* Footer: Timestamp and Read Checkmarks */}
+                      <View style={styles.bubbleFooter}>
+                        <Text
+                          style={[
+                            styles.timestampText,
+                            { color: isMyMessage ? '#BAE6FD' : '#94A3B8' },
+                          ]}>
+                          {formatTimestamp(msg.createdAt)}
+                        </Text>
+                        {isMyMessage && (
+                          <Ionicons
+                            name={msg.isRead ? 'checkmark-done' : 'checkmark'}
+                            size={14}
+                            color={msg.isRead ? '#10B981' : '#BAE6FD'}
+                          />
+                        )}
+                      </View>
+                    </View>
+                  </View>
+                );
+              })
+            )}
+
+            {/* Live Typing Indicator */}
+            {typingStatus && (
+              <View style={styles.typingIndicatorRow}>
+                <View style={styles.typingDot} />
+                <Text style={[styles.typingText, { color: timeTheme.colors.textSecondary }]}>
+                  {typingStatus}
+                </Text>
               </View>
-            </View>
-          </View>
+            )}
+          </ScrollView>
         )}
 
-        {/* Bottom Medical Disclaimer */}
+        {/* Bottom Message Input Bar */}
         <View
           style={[
-            styles.medicalDisclaimerCard,
+            styles.inputContainer,
             {
-              backgroundColor: timeTheme.colors.surfaceBg,
-              borderColor: timeTheme.colors.cardBorder,
-              borderWidth: 1,
-            },
-          ]}>
-          <Ionicons name="shield-checkmark" size={14} color={timeTheme.colors.textSecondary} />
-          <Text
-            style={[
-              styles.medicalDisclaimerText,
-              { color: timeTheme.colors.textSecondary },
-            ]}>
-            Personalized guidance based on your database regimen. In emergencies, contact a physician immediately.
-          </Text>
-        </View>
-      </ScrollView>
-
-      {/* Input Bar */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
-        <View
-          style={[
-            styles.inputArea,
-            {
-              backgroundColor: timeTheme.colors.surfaceBg,
+              backgroundColor: timeTheme.colors.card,
               borderTopColor: timeTheme.colors.cardBorder,
             },
           ]}>
           <TextInput
-            placeholder="Ask about your medications, schedule, stock..."
-            placeholderTextColor="#94A3B8"
-            value={inputText}
-            onChangeText={setInputText}
-            onSubmitEditing={() => handleSendMessage()}
-            returnKeyType="send"
-            multiline={false}
             style={[
-              styles.textInput,
+              styles.input,
               {
-                backgroundColor: timeTheme.colors.background,
+                backgroundColor: timeTheme.isDark ? '#0F172A' : '#F1F5F9',
                 color: timeTheme.colors.textPrimary,
                 borderColor: timeTheme.colors.cardBorder,
-                borderWidth: 1,
               },
             ]}
+            placeholder={
+              isAdmin
+                ? `Reply to ${selectedThreadUser?.name || 'User'} via Socket.IO...`
+                : 'Message Admin or describe a bug...'
+            }
+            placeholderTextColor={timeTheme.colors.textSecondary}
+            value={inputMessage}
+            onChangeText={handleInputChange}
+            multiline
+            maxLength={1000}
           />
-
           <TouchableOpacity
-            onPress={() => handleSendMessage()}
-            disabled={!inputText.trim() || isTyping}
             style={[
-              styles.sendButton,
-              (!inputText.trim() || isTyping) && styles.sendButtonDisabled,
+              styles.sendBtn,
+              (!inputMessage.trim() || isSending) && styles.sendBtnDisabled,
             ]}
+            onPress={() => handleSend()}
+            disabled={!inputMessage.trim() || isSending}
             activeOpacity={0.8}>
-            <Ionicons name="arrow-up" size={20} color="#FFFFFF" />
+            {isSending ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Ionicons name="send" size={18} color="#FFFFFF" />
+            )}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -519,416 +686,332 @@ export default function ChatScreen() {
   );
 }
 
-/**
- * Intelligent Local Fallback in case of network downtime
- * Answers directly from the client's cached PostgreSQL medication rows
- */
-function generateLocalDatabaseFallback(
-  userQuery: string,
-  user: any,
-  meds: any[],
-): { text: string; quickReplies?: string[] } {
-  const q = userQuery.toLowerCase().trim();
-  const patientName = user?.name || 'Friend';
-
-  if (
-    q.includes('my med') ||
-    q.includes('what med') ||
-    q.includes('list') ||
-    q.includes('schedule') ||
-    q.includes('routine') ||
-    q.includes('today')
-  ) {
-    if (meds.length === 0) {
-      return {
-        text: `Hello **${patientName}**! You do not have any active medications in your schedule right now.\n\nAdd one in the **Meds** tab to start tracking doses and alarms.`,
-        quickReplies: ['How to add a medication', 'Alarm settings'],
-      };
-    }
-
-    const listStr = meds
-      .map((m) => {
-        let timeText = m.time || m.timeSlot || 'Scheduled';
-        if (m.times) {
-          try {
-            const parsed = JSON.parse(m.times);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              timeText = parsed.map((p: any) => `${p.slot} (${p.time})`).join(', ');
-            }
-          } catch {
-            // fallback
-          }
-        }
-        return `• **${m.name}** (${m.dosage})\n  ⏰ **Time:** ${timeText}\n  📦 **Pills Left:** ${m.pillsLeft} of ${m.totalPills}\n  📋 **Instructions:** ${m.instructions || 'Take as prescribed'}`;
-      })
-      .join('\n\n');
-
-    return {
-      text: `📋 **Your Live Medication Schedule (${patientName}):**\n\n${listStr}`,
-      quickReplies: ['Check remaining pills', 'Missed dose advice'],
-    };
-  }
-
-  if (q.includes('pill') || q.includes('left') || q.includes('stock') || q.includes('refill')) {
-    if (meds.length === 0) {
-      return {
-        text: `You have no medications recorded in your inventory yet, **${patientName}**.`,
-      };
-    }
-
-    const stockSummary = meds
-      .map((m) => `• **${m.name}**: **${m.pillsLeft}** pills left (out of ${m.totalPills})`)
-      .join('\n');
-
-    return {
-      text: `📦 **Inventory Status for ${patientName}:**\n\n${stockSummary}`,
-      quickReplies: ['My schedule', 'Missed dose advice'],
-    };
-  }
-
-  // Matching medication by name in user's database
-  const matching = meds.find((m) => q.includes(m.name.toLowerCase()));
-  if (matching) {
-    return {
-      text: `💊 **${matching.name} (${matching.dosage}):**\n\n• **Prescription Dosage:** ${matching.dosage}\n• **Instructions:** ${matching.instructions || 'Take with water'}\n• **Pills Remaining:** ${matching.pillsLeft} of ${matching.totalPills}`,
-      quickReplies: ['My schedule', 'Food advice'],
-    };
-  }
-
-  return {
-    text: `🤖 **MediRem Health Assistant:**\n\nI received your question about **"${userQuery}"**.\n\nYou currently have **${meds.length}** medication(s) in your regimen. How can I help you regarding your schedules, doses, or alarms?`,
-    quickReplies: ['My schedule', 'Pills left', 'Missed dose rule'],
-  };
-}
-
-function LinearBotIcon() {
-  return (
-    <View style={styles.botIconWrapper}>
-      <MaterialCommunityIcons name="robot" size={24} color="#FFFFFF" />
-    </View>
-  );
-}
-
-function FormattedText({ text, isAi, isDark }: { text: string; isAi: boolean; isDark?: boolean }) {
-  const lines = text.split('\n');
-
-  return (
-    <View>
-      {lines.map((line, idx) => {
-        if (!line.trim()) {
-          return <View key={idx} style={{ height: 6 }} />;
-        }
-
-        const parts = line.split(/(\*\*.*?\*\*)/g);
-
-        return (
-          <Text
-            key={idx}
-            style={[
-              styles.messageText,
-              isAi
-                ? [styles.messageTextAi, isDark && { color: '#F1F5F9' }]
-                : styles.messageTextUser,
-              line.startsWith('•') && styles.bulletLine,
-            ]}>
-            {parts.map((part, pIdx) => {
-              if (part.startsWith('**') && part.endsWith('**')) {
-                return (
-                  <Text key={pIdx} style={[styles.boldText, isAi && isDark && { color: '#FFFFFF' }]}>
-                    {part.slice(2, -2)}
-                  </Text>
-                );
-              }
-              return part;
-            })}
-          </Text>
-        );
-      })}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
   },
-  headerLeft: {
+  headerBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerProfileBox: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    marginLeft: 12,
+  },
+  headerAvatarContainer: {
+    position: 'relative',
+    marginRight: 10,
+  },
+  headerAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerOnlineDot: {
+    position: 'absolute',
+    bottom: -1,
+    right: -1,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  headerTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  headerSubtitle: {
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 1,
+  },
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 5,
+  },
+  verifiedBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  socketDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  adminBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#D97706',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 6,
+  },
+  adminBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  centerContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  loadingText: {
+    fontSize: 13,
+    marginTop: 10,
+    fontWeight: '500',
+  },
+  emptyContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+  },
+  emptyIconBox: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  emptySub: {
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  threadsList: {
+    padding: 16,
     gap: 12,
   },
-  botAvatar: {
-    position: 'relative',
+  threadCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1.5,
   },
-  botIconWrapper: {
+  threadAvatar: {
     width: 44,
     height: 44,
     borderRadius: 22,
     backgroundColor: '#208AEF',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#208AEF',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 3,
+    marginRight: 12,
   },
-  onlineDot: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#10B981',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  headerTitle: {
-    fontSize: 17,
+  threadAvatarText: {
+    fontSize: 18,
     fontWeight: '800',
-    color: '#0F172A',
-  },
-  aiBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#208AEF',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-  },
-  aiBadgeText: {
     color: '#FFFFFF',
-    fontSize: 9,
-    fontWeight: '800',
-    textTransform: 'uppercase',
   },
-  headerSubtitle: {
+  threadUserName: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  threadTime: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  threadEmail: {
     fontSize: 12,
-    color: '#64748B',
     marginTop: 1,
   },
-  clearBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#F1F5F9',
+  threadLastMsg: {
+    fontSize: 13,
+    marginTop: 4,
+  },
+  unreadBadge: {
+    backgroundColor: '#208AEF',
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 6,
   },
-  chipsContainer: {
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    paddingVertical: 8,
-  },
-  chipsScroll: {
-    paddingHorizontal: 16,
-    gap: 8,
-  },
-  chipButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  chipText: {
-    fontSize: 12,
-    color: '#208AEF',
-    fontWeight: '600',
-  },
-  messagesScroll: {
-    flex: 1,
+  unreadBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   messagesContent: {
     padding: 16,
     paddingBottom: 24,
-    gap: 16,
   },
-  messageRow: {
+  adminWelcomeCard: {
     flexDirection: 'row',
-    gap: 10,
-    maxWidth: '88%',
-  },
-  messageRowAi: {
-    alignSelf: 'flex-start',
-  },
-  messageRowUser: {
-    alignSelf: 'flex-end',
-    justifyContent: 'flex-end',
-  },
-  msgAvatarBox: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    marginBottom: 16,
+  },
+  adminWelcomeIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#208AEF',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 4,
+    marginRight: 12,
   },
-  bubble: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+  adminWelcomeTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  adminWelcomeSub: {
+    fontSize: 12,
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  emptyThreadBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  emptyThreadTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginTop: 10,
+  },
+  emptyThreadSub: {
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 4,
+    paddingHorizontal: 24,
+  },
+  msgRow: {
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+  msgRowRight: {
+    justifyContent: 'flex-end',
+  },
+  msgRowLeft: {
+    justifyContent: 'flex-start',
+  },
+  msgBubble: {
+    maxWidth: '82%',
+    padding: 12,
     borderRadius: 18,
   },
-  bubbleAi: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderTopLeftRadius: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  bubbleUser: {
+  myBubble: {
     backgroundColor: '#208AEF',
-    borderTopRightRadius: 4,
+    borderBottomRightRadius: 4,
   },
-  messageText: {
+  otherBubble: {
+    borderWidth: 1.5,
+    borderBottomLeftRadius: 4,
+  },
+  bubbleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  roleChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  adminRoleChip: {
+    backgroundColor: '#10B981',
+  },
+  userRoleChip: {
+    backgroundColor: '#6366F1',
+  },
+  roleChipText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  senderName: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  msgText: {
     fontSize: 14,
     lineHeight: 20,
   },
-  messageTextAi: {
-    color: '#1E293B',
-  },
-  messageTextUser: {
-    color: '#FFFFFF',
-  },
-  boldText: {
-    fontWeight: '800',
-  },
-  bulletLine: {
-    paddingLeft: 4,
-    marginTop: 2,
-  },
-  metaRow: {
+  bubbleFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 6,
+    justifyContent: 'flex-end',
+    gap: 4,
+    marginTop: 4,
   },
-  timestamp: {
+  timestampText: {
     fontSize: 10,
   },
-  timestampAi: {
-    color: '#94A3B8',
-  },
-  timestampUser: {
-    color: '#BFDBFE',
-    alignSelf: 'flex-end',
-  },
-  aiSourceText: {
-    fontSize: 9,
-    color: '#059669',
-    fontWeight: '700',
-  },
-  quickRepliesBox: {
+  typingIndicatorRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
     gap: 6,
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  quickReplyPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
+    marginBottom: 8,
   },
-  quickReplyText: {
-    fontSize: 11,
-    color: '#208AEF',
-    fontWeight: '600',
-  },
-  typingBubble: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 10,
+  typingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#208AEF',
   },
   typingText: {
     fontSize: 12,
-    color: '#64748B',
     fontStyle: 'italic',
   },
-  dotsRow: {
-    flexDirection: 'row',
-    gap: 3,
-  },
-  dot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#208AEF',
-  },
-  dot1: { opacity: 0.4 },
-  dot2: { opacity: 0.7 },
-  dot3: { opacity: 1 },
-  medicalDisclaimerCard: {
+  inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    padding: 10,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 10,
-    marginTop: 8,
-  },
-  medicalDisclaimerText: {
-    flex: 1,
-    fontSize: 10,
-    color: '#64748B',
-    lineHeight: 14,
-  },
-  inputArea: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
     gap: 10,
   },
-  textInput: {
+  input: {
     flex: 1,
-    height: 42,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 21,
+    borderRadius: 20,
+    borderWidth: 1,
     paddingHorizontal: 16,
+    paddingVertical: 10,
     fontSize: 14,
-    color: '#0F172A',
+    maxHeight: 100,
   },
-  sendButton: {
+  sendBtn: {
     width: 42,
     height: 42,
     borderRadius: 21,
@@ -936,7 +1019,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sendButtonDisabled: {
-    backgroundColor: '#CBD5E1',
+  sendBtnDisabled: {
+    backgroundColor: '#94A3B8',
+    opacity: 0.6,
   },
 });

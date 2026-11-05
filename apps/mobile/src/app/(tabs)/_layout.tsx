@@ -116,7 +116,7 @@ function FloatingAiTabButton({
     if (onPress) {
       onPress(e);
     } else {
-      router.push('/(tabs)/chat');
+      router.push('/(tabs)/chatbot');
     }
   };
 
@@ -239,7 +239,7 @@ export default function TabLayout() {
 
       {/* 3. AI Bot Tab (Center Elevated Button) */}
       <Tabs.Screen
-        name="chat"
+        name="chatbot"
         options={{
           title: 'AI Bot',
           tabBarButton: (props) => (
@@ -280,6 +280,14 @@ export default function TabLayout() {
               color={color as string}
             />
           ),
+        }}
+      />
+
+      {/* 6. Live Support & Admin Chat (Retains bottom tabs while hidden from tab bar buttons) */}
+      <Tabs.Screen
+        name="chat"
+        options={{
+          href: null,
         }}
       />
     </Tabs>

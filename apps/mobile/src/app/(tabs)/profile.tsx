@@ -773,8 +773,76 @@ export default function ProfileScreen() {
                 <Ionicons name="chevron-forward" size={14} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
+
+            {/* Admin Support & Bug Reports Desk Entrance */}
+            <TouchableOpacity
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginTop: 12,
+                paddingTop: 12,
+                borderTopWidth: 1,
+                borderTopColor: timeTheme.colors.cardBorder,
+              }}
+              activeOpacity={0.7}
+              onPress={() => router.push('/(tabs)/chat')}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#FEF3C7', alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="chatbubbles" size={15} color="#D97706" />
+                </View>
+                <View>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: timeTheme.colors.textPrimary }}>
+                    User Bug Reports & Support Desk
+                  </Text>
+                  <Text style={{ fontSize: 11, color: timeTheme.colors.textSecondary }}>
+                    Review user bug tickets & reply in real time
+                  </Text>
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#D97706' }}>Open Desk</Text>
+                <Ionicons name="chevron-forward" size={14} color="#D97706" />
+              </View>
+              </TouchableOpacity>
           </View>
         )}
+
+        {/* AI Health Assistant Hero Card */}
+        <TouchableOpacity
+          style={[
+            styles.aiAssistantHeroCard,
+            {
+              backgroundColor: timeTheme.isDark ? '#0B233A' : '#EFF6FF',
+              borderColor: timeTheme.isDark ? '#1E3A8A' : '#BFDBFE',
+            },
+          ]}
+          onPress={() => router.push('/(tabs)/chat')}
+          activeOpacity={0.85}>
+          <View style={styles.aiAssistantHeroLeft}>
+            <View style={styles.aiAssistantHeroIconBox}>
+              <Ionicons name="sparkles" size={20} color="#FFFFFF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                <Text style={[styles.aiAssistantHeroTitle, { color: timeTheme.colors.textPrimary }]}>
+                  Live Support & Admin Chat
+                </Text>
+                <View style={styles.aiLiveBadge}>
+                  <View style={styles.aiLiveDot} />
+                  <Text style={styles.aiLiveBadgeText}>ONLINE</Text>
+                </View>
+              </View>
+              <Text style={[styles.aiAssistantHeroSub, { color: timeTheme.colors.textSecondary }]}>
+                Report bugs, ask questions & chat directly with Admin
+              </Text>
+            </View>
+          </View>
+          <View style={styles.aiAssistantHeroAction}>
+            <Text style={styles.aiAssistantHeroActionText}>Chat</Text>
+            <Ionicons name="chevron-forward" size={14} color="#208AEF" />
+          </View>
+        </TouchableOpacity>
 
         {/* Section: Account & Personal Information */}
         <Text style={[styles.sectionHeader, { color: timeTheme.colors.textSecondary }]}>Account Details</Text>
@@ -1206,7 +1274,7 @@ export default function ProfileScreen() {
           </View>
 
           <TouchableOpacity
-            style={[styles.menuItem, { borderBottomColor: 'transparent' }]}
+            style={[styles.menuItem, { borderBottomColor: timeTheme.colors.cardBorder }]}
             activeOpacity={0.7}
             onPress={() => router.push('/(tabs)/meds')}>
             <View style={styles.menuItemLeft}>
@@ -1216,6 +1284,47 @@ export default function ProfileScreen() {
               <Text style={[styles.menuText, { color: timeTheme.colors.textPrimary }]}>Manage Medications ({medicationsCount})</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.menuItem, { borderBottomColor: timeTheme.colors.cardBorder }]}
+            activeOpacity={0.7}
+            onPress={() => router.push('/(tabs)/chat')}>
+            <View style={styles.menuItemLeft}>
+              <View style={[styles.menuIcon, { backgroundColor: timeTheme.isDark ? '#064E3B' : '#ECFDF5' }]}>
+                <Ionicons name="chatbubbles-outline" size={18} color="#10B981" />
+              </View>
+              <View>
+                <Text style={[styles.menuText, { color: timeTheme.colors.textPrimary }]}>Live Support & Admin Chat</Text>
+                <Text style={[styles.menuSubText, { color: timeTheme.colors.textSecondary }]}>Chat with Admin in real-time via Socket.IO</Text>
+              </View>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={{ backgroundColor: '#10B981', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 }}>
+                <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700' }}>LIVE CHAT</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.menuItem, { borderBottomColor: 'transparent' }]}
+            activeOpacity={0.7}
+            onPress={() => router.push('/(tabs)/chat')}>
+            <View style={styles.menuItemLeft}>
+              <View style={[styles.menuIcon, { backgroundColor: timeTheme.isDark ? '#450A0A' : '#FEF2F2' }]}>
+                <Ionicons name="bug-outline" size={18} color="#EF4444" />
+              </View>
+              <View>
+                <Text style={[styles.menuText, { color: timeTheme.colors.textPrimary }]}>Report a Bug / Contact Admin</Text>
+                <Text style={[styles.menuSubText, { color: timeTheme.colors.textSecondary }]}>Direct live support chat with Admin for fixes</Text>
+              </View>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={{ backgroundColor: '#EF4444', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 }}>
+                <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700' }}>SUPPORT</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </View>
           </TouchableOpacity>
         </View>
 
@@ -2221,6 +2330,82 @@ const styles = StyleSheet.create({
     width: 1,
     height: 28,
     backgroundColor: '#E2E8F0',
+  },
+  aiAssistantHeroCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    marginBottom: 20,
+    shadowColor: '#208AEF',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  aiAssistantHeroLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 10,
+  },
+  aiAssistantHeroIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#208AEF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  aiAssistantHeroTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  aiAssistantHeroSub: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  aiLiveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 6,
+  },
+  aiLiveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+  },
+  aiLiveBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#047857',
+  },
+  aiAssistantHeroAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  aiAssistantHeroActionText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#208AEF',
   },
   sectionHeader: {
     fontSize: 11,

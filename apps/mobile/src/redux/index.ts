@@ -30,6 +30,7 @@ export * from './api/authApi';
 export * from './api/userApi';
 export * from './api/medicationsApi';
 export * from './api/chatApi';
+export * from './api/supportApi';
 export * from './slices/authSlice';
 export * from './slices/alarmSettingsSlice';
 export * from './slices/themeSlice';

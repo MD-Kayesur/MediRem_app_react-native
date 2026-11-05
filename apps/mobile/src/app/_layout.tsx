@@ -14,6 +14,7 @@ import { getUserSession } from '@/utils/authStorage';
 import { Colors } from '@/constants/theme';
 import { initializeNotificationService } from '@/utils/notifications';
 import { syncOfflineQueue } from '@/utils/offlineSync';
+import { initializeBackendWarmup, warmupBackend } from '@/utils/backendWarmup';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -21,6 +22,9 @@ function SessionRestoreGate({ children }: { children: React.ReactNode }) {
   const dispatch = useAppDispatch();
 
   useEffect(() => {
+    // Warm up backend and database immediately in background on app startup
+    warmupBackend().catch(() => {});
+
     let active = true;
     (async () => {
       try {
@@ -83,6 +87,12 @@ export default function RootLayout() {
   useEffect(() => {
     // Initialize notification channels and permissions
     initializeNotificationService().catch(() => {});
+
+    // Automatically trigger background backend & DB warm-up on app open and foreground transitions
+    const cleanupWarmup = initializeBackendWarmup();
+    return () => {
+      cleanupWarmup();
+    };
   }, []);
 
   return (
@@ -102,6 +112,8 @@ export default function RootLayout() {
             <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="dashboard" options={{ headerShown: false }} />
+            <Stack.Screen name="support" options={{ headerShown: false }} />
+            <Stack.Screen name="chat" options={{ headerShown: false }} />
           </Stack>
         </SafeAreaProvider>
       </SessionRestoreGate>
