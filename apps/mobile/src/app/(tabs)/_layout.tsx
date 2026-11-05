@@ -287,7 +287,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="support"
         options={{
-          href: null,
+          tabBarItemStyle: { display: 'none' },
+          tabBarButton: () => null,
         }}
       />
     </Tabs>

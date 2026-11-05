@@ -256,7 +256,7 @@ export default function SupportScreen() {
             },
           ]}>
           <TouchableOpacity
-            onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/profile'))}
+            onPress={() => router.push('/(tabs)/profile')}
             style={[styles.headerBtn, { borderColor: timeTheme.colors.cardBorder }]}
             activeOpacity={0.7}>
             <Ionicons name="arrow-back" size={20} color={timeTheme.colors.textPrimary} />
@@ -410,10 +410,8 @@ export default function SupportScreen() {
           onPress={() => {
             if (isAdmin && selectedThreadUser) {
               setSelectedThreadUser(null);
-            } else if (router.canGoBack()) {
-              router.back();
             } else {
-              router.replace('/(tabs)/profile');
+              router.push('/(tabs)/profile');
             }
           }}
           style={[styles.headerBtn, { borderColor: timeTheme.colors.cardBorder }]}

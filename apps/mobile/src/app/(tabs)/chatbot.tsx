@@ -12,6 +12,7 @@ import {
   Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAppSelector } from '@/redux/hooks';
 import { selectCurrentUser } from '@/redux/slices/authSlice';
@@ -201,6 +202,20 @@ export default function ChatbotScreen() {
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <ThemeHeaderButton size={36} />
+          <TouchableOpacity
+            onPress={() => router.push('/(tabs)/support')}
+            style={[
+              styles.clearBtn,
+              {
+                backgroundColor: timeTheme.colors.surfaceBg,
+                borderColor: timeTheme.colors.cardBorder,
+                borderWidth: 1,
+              },
+            ]}
+            activeOpacity={0.7}
+            accessibilityLabel="Live Support Desk">
+            <Ionicons name="chatbubbles-outline" size={18} color="#208AEF" />
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={handleClearChat}
             style={[
