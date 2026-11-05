@@ -124,6 +124,7 @@ export class SupportGateway
         userId: savedMsg.userId,
         lastMessage: savedMsg,
       });
+      this.server.to('admin_desk').emit('new_message', savedMsg);
 
       this.logger.log(
         `⚡ [Socket.IO] Broadcasted new message to room ${roomName} from ${savedMsg.senderRole} ${savedMsg.senderName}`,

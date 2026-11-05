@@ -1,6 +1,7 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { AuthUser } from '@medirem/types';
 import { authApi } from '../api/authApi';
+import { userApi } from '../api/userApi';
 
 export interface AuthState {
   user: AuthUser | null;
@@ -122,6 +123,27 @@ export const authSlice = createSlice({
     builder.addMatcher(authApi.endpoints.verifySignup.matchFulfilled, (state, action) => {
       if (action.payload.user) {
         state.user = action.payload.user;
+      }
+    });
+
+    // Automatically update role and user profile when getMe fulfills from Neon DB
+    builder.addMatcher(userApi.endpoints.getMe.matchFulfilled, (state, action) => {
+      if (action.payload?.data) {
+        const d = action.payload.data;
+        state.user = {
+          ...(state.user || {
+            id: d.id,
+            name: d.name,
+            email: d.email,
+            createdAt: d.createdAt,
+          }),
+          id: d.id,
+          name: d.name,
+          email: d.email,
+          role: d.role,
+          phone: d.phone || undefined,
+          avatarUrl: d.avatarUrl || undefined,
+        };
       }
     });
   },

@@ -20,6 +20,7 @@ import {
   useGetSupportMessagesQuery,
   useSendSupportMessageMutation,
   useGetAdminThreadsQuery,
+  useGetMeQuery,
 } from '@/redux';
 import { SupportMessage, SupportThread } from '@medirem/types';
 import { useAppTheme } from '@/hooks/useAppTheme';
@@ -35,7 +36,22 @@ import {
 export default function SupportScreen() {
   const { timeTheme } = useAppTheme();
   const currentUser = useAppSelector(selectCurrentUser);
-  const isAdmin = currentUser?.role === 'ADMIN';
+  const activeUserId = currentUser?.id;
+  const activeUserEmail = currentUser?.email;
+
+  // 1. Fetch exact role & user profile from Neon Cloud PostgreSQL backend
+  const { data: profileResponse } = useGetMeQuery(
+    activeUserId || activeUserEmail
+      ? { userId: activeUserId, userEmail: activeUserEmail }
+      : undefined,
+    {
+      skip: !activeUserId && !activeUserEmail,
+      refetchOnMountOrArgChange: true,
+    }
+  );
+
+  const liveUser = profileResponse?.data || currentUser;
+  const isAdmin = (liveUser?.role === 'ADMIN') || (currentUser?.role === 'ADMIN');
 
   const params = useLocalSearchParams<{ targetUserId?: string; userName?: string }>();
   const [selectedThreadUser, setSelectedThreadUser] = useState<{
@@ -57,7 +73,7 @@ export default function SupportScreen() {
   const typingTimeoutRef = useRef<any>(null);
 
   // Active thread owner: regular user has their own thread; Admin views selected user's thread
-  const activeThreadUserId = isAdmin ? selectedThreadUser?.id : currentUser?.id;
+  const activeThreadUserId = isAdmin ? selectedThreadUser?.id : (liveUser?.id || currentUser?.id);
 
   // 1. Permanently maintained history from Neon Cloud PostgreSQL
   const {
@@ -110,6 +126,9 @@ export default function SupportScreen() {
 
     // Live incoming message via Socket.IO
     const handleNewMessage = (newMsg: SupportMessage) => {
+      if (isAdmin) {
+        refetchAdminThreads();
+      }
       if (newMsg && newMsg.userId === activeThreadUserId) {
         setSocketMessages((prev) => {
           if (prev.some((m) => m.id === newMsg.id)) return prev;
@@ -154,17 +173,35 @@ export default function SupportScreen() {
     };
   }, [activeThreadUserId, isAdmin, refetchAdminThreads]);
 
-  // Join the thread room on socket connect/change
+  // 1. Admin joins 'admin_desk' immediately so all incoming messages trigger live updates on the desk
+  useEffect(() => {
+    if (isAdmin) {
+      const socket = getSocket();
+      const joinDesk = () => {
+        socket.emit('join_thread', {
+          userId: liveUser?.id || currentUser?.id || 'admin',
+          role: 'ADMIN',
+        });
+      };
+      if (socket.connected) {
+        joinDesk();
+      } else {
+        socket.once('connect', joinDesk);
+      }
+    }
+  }, [isAdmin, liveUser?.id, currentUser?.id]);
+
+  // 2. Join the thread room on socket connect/change
   useEffect(() => {
     if (activeThreadUserId) {
-      socketJoinThread(activeThreadUserId, currentUser?.role);
+      socketJoinThread(activeThreadUserId, isAdmin ? 'ADMIN' : 'USER');
     }
     return () => {
       if (activeThreadUserId) {
         socketLeaveThread(activeThreadUserId);
       }
     };
-  }, [activeThreadUserId, currentUser?.role]);
+  }, [activeThreadUserId, isAdmin]);
 
   // Auto-scroll down on new messages
   useEffect(() => {
@@ -180,7 +217,11 @@ export default function SupportScreen() {
     setInputMessage(text);
     if (!activeThreadUserId || !currentUser) return;
 
-    socketEmitTyping(activeThreadUserId, currentUser.name, currentUser.role as any);
+    socketEmitTyping(
+      activeThreadUserId,
+      liveUser?.name || currentUser?.name || (isAdmin ? 'Admin' : 'User'),
+      isAdmin ? 'ADMIN' : 'USER',
+    );
 
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
@@ -208,10 +249,10 @@ export default function SupportScreen() {
 
     // 1. Real-time Socket.IO emission
     socketSendMessage({
-      senderId: currentUser?.id || '',
-      senderEmail: currentUser?.email || undefined,
+      senderId: liveUser?.id || currentUser?.id || '',
+      senderEmail: liveUser?.email || currentUser?.email || undefined,
       message: textToSend,
-      userId: isAdmin ? selectedThreadUser?.id : undefined,
+      userId: isAdmin ? selectedThreadUser?.id : (liveUser?.id || currentUser?.id),
     });
 
     // 2. Persistent Neon Cloud database storage
