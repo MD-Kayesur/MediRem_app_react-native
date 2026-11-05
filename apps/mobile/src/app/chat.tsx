@@ -1,11 +1,7 @@
-import React from 'react';
-import { Redirect, useLocalSearchParams } from 'expo-router';
+import SupportScreen from './support';
 
 /**
- * Root Chat route redirects directly into the Tab-enabled Chat screen (/(tabs)/chat)
- * so the bottom navigation tab bar is always preserved.
+ * Chat route aliases directly to SupportScreen so it renders the full
+ * Live Support & Admin Chat without any runtime redirect cycles.
  */
-export default function RootChatRedirect() {
-  const params = useLocalSearchParams();
-  return <Redirect href={{ pathname: '/(tabs)/chat', params }} />;
-}
+export default SupportScreen;

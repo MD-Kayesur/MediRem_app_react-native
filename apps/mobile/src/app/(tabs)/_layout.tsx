@@ -282,14 +282,6 @@ export default function TabLayout() {
           ),
         }}
       />
-
-      {/* 6. Live Support & Admin Chat (Retains bottom tabs while hidden from tab bar buttons) */}
-      <Tabs.Screen
-        name="chat"
-        options={{
-          href: null,
-        }}
-      />
     </Tabs>
   );
 }
