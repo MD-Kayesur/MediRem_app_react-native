@@ -786,7 +786,7 @@ export default function ProfileScreen() {
                 borderTopColor: timeTheme.colors.cardBorder,
               }}
               activeOpacity={0.7}
-              onPress={() => router.push('/support')}>
+              onPress={() => router.push('/(tabs)/support')}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#FEF3C7', alignItems: 'center', justifyContent: 'center' }}>
                   <Ionicons name="chatbubbles" size={15} color="#D97706" />
@@ -817,7 +817,7 @@ export default function ProfileScreen() {
               borderColor: timeTheme.isDark ? '#1E3A8A' : '#BFDBFE',
             },
           ]}
-          onPress={() => router.push('/support')}
+          onPress={() => router.push('/(tabs)/support')}
           activeOpacity={0.85}>
           <View style={styles.aiAssistantHeroLeft}>
             <View style={styles.aiAssistantHeroIconBox}>
@@ -1289,7 +1289,7 @@ export default function ProfileScreen() {
           <TouchableOpacity
             style={[styles.menuItem, { borderBottomColor: timeTheme.colors.cardBorder }]}
             activeOpacity={0.7}
-            onPress={() => router.push('/support')}>
+            onPress={() => router.push('/(tabs)/support')}>
             <View style={styles.menuItemLeft}>
               <View style={[styles.menuIcon, { backgroundColor: timeTheme.isDark ? '#064E3B' : '#ECFDF5' }]}>
                 <Ionicons name="chatbubbles-outline" size={18} color="#10B981" />
@@ -1309,7 +1309,7 @@ export default function ProfileScreen() {
           <TouchableOpacity
             style={[styles.menuItem, { borderBottomColor: 'transparent' }]}
             activeOpacity={0.7}
-            onPress={() => router.push('/support')}>
+            onPress={() => router.push('/(tabs)/support')}>
             <View style={styles.menuItemLeft}>
               <View style={[styles.menuIcon, { backgroundColor: timeTheme.isDark ? '#450A0A' : '#FEF2F2' }]}>
                 <Ionicons name="bug-outline" size={18} color="#EF4444" />

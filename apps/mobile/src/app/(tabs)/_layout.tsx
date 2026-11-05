@@ -282,6 +282,14 @@ export default function TabLayout() {
           ),
         }}
       />
+
+      {/* 6. Support Screen (Preserves bottom tab navigation bar while hidden from tab bar buttons) */}
+      <Tabs.Screen
+        name="support"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }

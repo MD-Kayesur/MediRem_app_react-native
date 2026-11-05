@@ -493,7 +493,7 @@ export default function SupportScreen() {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 0}>
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
         {/* Message Stream */}
         {isLoadingHistory && allMessages.length === 0 ? (
           <View style={styles.centerContainer}>
